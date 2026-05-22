@@ -17,11 +17,13 @@ try {
     $eventsBefore = events_count_for_day($today['month'], $today['day']);
     $items = run_daily_ranking();
     $eventsAfter = events_count_for_day($today['month'], $today['day']);
+    $topicsAfter = current_topics_count_for_date($today['date']);
     echo json_encode([
         'ok' => true,
         'count' => count($items),
         'approved_events_before' => $eventsBefore,
         'approved_events_after' => $eventsAfter,
+        'topics_after' => $topicsAfter,
         'date' => $today['date'],
     ]);
 } catch (Throwable $e) {

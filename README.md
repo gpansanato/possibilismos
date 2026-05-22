@@ -67,3 +67,20 @@ Fonte tecnica:
 ```text
 https://api.wikimedia.org/feed/v1/wikipedia/{language}/onthisday/{type}/{MM}/{DD}
 ```
+
+## Noticias e Priorizacao
+
+A rotina diaria tambem tenta coletar noticias por RSS configurado em `app/config.php`.
+No MVP, as fontes padrao usam Google News Brasil, Mundo e Tecnologia.
+
+Se a coleta RSS falhar, o sistema usa temas seed para manter o ranking funcionando.
+
+O score de priorizacao combina:
+
+```text
+relevancia historica       peso principal, a partir de base_score
+conexao com noticias       termos dos eventos comparados a noticias do dia
+aniversario significativo  10, 25, 50, 100 anos e multiplos relevantes
+categoria em pauta         categoria do evento presente nos topicos atuais
+diversidade editorial      pequeno ajuste para evitar repeticao de categoria
+```

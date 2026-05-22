@@ -215,23 +215,144 @@ function infer_event_region(array $event, string $language): string
 function current_topics_for_today(?string $runDate = null): array
 {
     $runDate = $runDate ?: today_key()['date'];
-    $topics = [
-        ['title' => 'tecnologia', 'keywords' => 'tecnologia inteligencia artificial internet software dados'],
-        ['title' => 'politica', 'keywords' => 'politica governo eleicao congresso diplomacia'],
-        ['title' => 'economia', 'keywords' => 'economia mercado juros inflacao empresas comercio'],
-        ['title' => 'ciencia', 'keywords' => 'ciencia pesquisa espaco medicina clima energia'],
-        ['title' => 'cultura', 'keywords' => 'cultura cinema musica literatura arte televisao'],
-    ];
+    $topics = fetch_current_news_topics($runDate);
+
+    if (!$topics) {
+        $topics = fallback_current_topics();
+    }
 
     foreach ($topics as $topic) {
         $stmt = db()->prepare(
             'INSERT INTO current_topics (run_date, title, keywords, source, created_at)
              VALUES (?, ?, ?, ?, NOW())'
         );
-        $stmt->execute([$runDate, $topic['title'], $topic['keywords'], 'seed']);
+        $stmt->execute([
+            $runDate,
+            $topic['title'],
+            $topic['keywords'],
+            $topic['source'],
+        ]);
     }
 
     return $topics;
+}
+
+function fetch_current_news_topics(string $runDate): array
+{
+    $config = require __DIR__ . '/config.php';
+    $settings = $config['sources']['news'] ?? [];
+
+    if (empty($settings['enabled'])) {
+        return [];
+    }
+
+    $topics = [];
+    $maxItems = (int) ($settings['max_items'] ?? 30);
+    $feeds = $settings['feeds'] ?? [];
+
+    foreach ($feeds as $feed) {
+        if (count($topics) >= $maxItems) {
+            break;
+        }
+
+        $body = http_get_json($feed['url'], $config['sources']['wikimedia']['user_agent'] ?? 'PossibilismosMVP/0.1');
+        if (!$body) {
+            continue;
+        }
+
+        foreach (parse_rss_items($body) as $item) {
+            if (count($topics) >= $maxItems) {
+                break 2;
+            }
+
+            $text = trim($item['title'] . ' ' . $item['description']);
+            $keywords = extract_news_keywords($text, (int) ($settings['min_keyword_length'] ?? 4));
+            if (!$keywords) {
+                continue;
+            }
+
+            $topics[] = [
+                'title' => $item['title'],
+                'keywords' => implode(' ', $keywords),
+                'source' => 'rss:' . ($feed['name'] ?? 'news'),
+            ];
+        }
+    }
+
+    return $topics;
+}
+
+function parse_rss_items(string $body): array
+{
+    if (!function_exists('simplexml_load_string')) {
+        return [];
+    }
+
+    $xml = @simplexml_load_string($body, 'SimpleXMLElement', LIBXML_NOCDATA);
+    if (!$xml || empty($xml->channel->item)) {
+        return [];
+    }
+
+    $items = [];
+    foreach ($xml->channel->item as $item) {
+        $title = trim(strip_tags((string) $item->title));
+        if ($title === '') {
+            continue;
+        }
+
+        $items[] = [
+            'title' => $title,
+            'description' => trim(strip_tags((string) $item->description)),
+        ];
+    }
+
+    return $items;
+}
+
+function extract_news_keywords(string $text, int $minLength): array
+{
+    $text = mb_strtolower(strip_tags($text), 'UTF-8');
+    $text = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $text);
+    $words = preg_split('/\s+/u', (string) $text);
+    $stopwords = news_stopwords();
+    $counts = [];
+
+    foreach ($words as $word) {
+        $word = trim($word);
+        if (mb_strlen($word, 'UTF-8') < $minLength || isset($stopwords[$word])) {
+            continue;
+        }
+
+        $counts[$word] = ($counts[$word] ?? 0) + 1;
+    }
+
+    arsort($counts);
+
+    return array_slice(array_keys($counts), 0, 12);
+}
+
+function news_stopwords(): array
+{
+    $words = [
+        'para', 'pela', 'pelo', 'pelos', 'pelas', 'como', 'mais', 'menos', 'sobre',
+        'entre', 'contra', 'apos', 'antes', 'ainda', 'isso', 'essa', 'esse', 'esta',
+        'este', 'sera', 'foram', 'pela', 'pode', 'onde', 'quando', 'quem', 'porque',
+        'brasil', 'google', 'news', 'noticias', 'veja', 'diz', 'tem', 'ter', 'com',
+        'uma', 'dos', 'das', 'que', 'por', 'nas', 'nos', 'aos', 'a', 'o', 'e',
+    ];
+
+    return array_fill_keys($words, true);
+}
+
+function fallback_current_topics(): array
+{
+    return [
+        ['title' => 'tecnologia', 'keywords' => 'tecnologia inteligencia artificial internet software dados', 'source' => 'seed'],
+        ['title' => 'politica', 'keywords' => 'politica governo eleicao congresso diplomacia', 'source' => 'seed'],
+        ['title' => 'economia', 'keywords' => 'economia mercado juros inflacao empresas comercio', 'source' => 'seed'],
+        ['title' => 'ciencia', 'keywords' => 'ciencia pesquisa espaco medicina clima energia', 'source' => 'seed'],
+        ['title' => 'cultura', 'keywords' => 'cultura cinema musica literatura arte televisao', 'source' => 'seed'],
+    ];
 }
 
 function topics_for_date(string $runDate): array

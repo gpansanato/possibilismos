@@ -16,5 +16,8 @@ return [
         'wikimedia' => [
             'user_agent' => 'PossibilismosMVP/0.1 (email-ou-url-de-contato)',
         ],
+        'news' => [
+            'enabled' => true,
+        ],
     ],
 ];

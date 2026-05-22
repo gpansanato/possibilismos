@@ -68,3 +68,11 @@ function rankings_for_date(string $runDate): array
 
     return $stmt->fetchAll();
 }
+
+function current_topics_count_for_date(string $runDate): int
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM current_topics WHERE run_date = ?');
+    $stmt->execute([$runDate]);
+
+    return (int) $stmt->fetchColumn();
+}
