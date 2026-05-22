@@ -11,4 +11,10 @@ return [
     'cron' => [
         'token' => 'UM_TOKEN_LONGO_E_ALEATORIO',
     ],
+
+    'sources' => [
+        'wikimedia' => [
+            'user_agent' => 'PossibilismosMVP/0.1 (email-ou-url-de-contato)',
+        ],
+    ],
 ];

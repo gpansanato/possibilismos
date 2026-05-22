@@ -4,10 +4,14 @@ require_admin();
 
 $result = null;
 $error = null;
+$today = today_key();
+$eventsBefore = events_count_for_day($today['month'], $today['day']);
+$eventsAfter = $eventsBefore;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $result = run_daily_ranking();
+        $eventsAfter = events_count_for_day($today['month'], $today['day']);
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -35,7 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit">Executar agora</button>
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
-        <?php if ($result !== null): ?><p><?= count($result) ?> eventos ranqueados.</p><?php endif; ?>
+        <p>Eventos cadastrados para hoje: <?= h((string) $eventsAfter) ?></p>
+        <?php if ($result !== null): ?>
+            <p><?= count($result) ?> eventos ranqueados. Antes da coleta havia <?= h((string) $eventsBefore) ?> eventos.</p>
+        <?php endif; ?>
     </section>
 </main>
 </body>

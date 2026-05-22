@@ -18,6 +18,8 @@ function run_daily_ranking(?string $runDate = null, ?int $limit = null): array
         );
         $stmt->execute([$runDate]);
 
+        import_historical_events_for_today();
+
         $pdo->prepare('DELETE FROM current_topics WHERE run_date = ?')->execute([$runDate]);
         $topics = current_topics_for_today($runDate);
         $events = events_for_day($today['month'], $today['day']);

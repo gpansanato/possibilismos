@@ -5,10 +5,10 @@ $config = [
     'timezone' => 'America/Sao_Paulo',
 
     'db' => [
-        'host' => 'mysql.panblan.com.br',
-        'name' => 'panblan',
-        'user' => 'panblan',
-        'pass' => 'meuposs1bilism0',
+        'host' => 'localhost',
+        'name' => 'NOME_DO_BANCO',
+        'user' => 'USUARIO_DO_BANCO',
+        'pass' => 'SENHA_DO_BANCO',
         'charset' => 'utf8mb4',
     ],
 
@@ -17,8 +17,18 @@ $config = [
     ],
 
     'cron' => [
-        'token' => '12312312312312312312312312312312a3333734534',
+        'token' => 'TROQUE_ESTE_TOKEN',
         'default_limit' => 5,
+    ],
+
+    'sources' => [
+        'wikimedia' => [
+            'enabled' => true,
+            'languages' => ['pt', 'en'],
+            'types' => ['selected', 'events'],
+            'max_import' => 30,
+            'user_agent' => 'PossibilismosMVP/0.1 (https://panblan.com.br)',
+        ],
     ],
 ];
 
