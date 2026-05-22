@@ -17,3 +17,4 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 ensure_event_review_status_schema();
+ensure_scoring_settings_schema();

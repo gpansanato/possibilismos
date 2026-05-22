@@ -19,6 +19,10 @@ render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de ope
             <span>Etapa 3</span>
             <strong>Aplicar score de prioridade</strong>
         </a>
+        <a class="option-card" href="/admin/priority.php">
+            <span>Analise</span>
+            <strong>Ver fatos e parametros do score</strong>
+        </a>
         <a class="option-card" href="/admin/run.php">
             <span>Automacao</span>
             <strong>Executar processo completo</strong>

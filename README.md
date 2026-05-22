@@ -91,5 +91,6 @@ No admin, o processo pode ser operado em etapas:
 /admin/collect-events.php  Coleta eventos historicos do dia
 /admin/collect-news.php    Coleta noticias e topicos do dia
 /admin/apply-score.php     Aplica o score de prioridade
+/admin/priority.php        Lista fatos ranqueados e parametros do score
 /admin/run.php             Executa o processo completo
 ```

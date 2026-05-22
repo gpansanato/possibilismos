@@ -44,7 +44,7 @@ function event_active_from_review_status(string $status): int
 function published_rankings_for_date(string $runDate): array
 {
     $stmt = db()->prepare(
-        'SELECT r.*, e.year, e.title, e.description, e.category, e.region, e.source_url, e.review_status
+        'SELECT r.*, e.year, e.title, e.description, e.category, e.region, e.source_url, e.review_status, e.base_score
          FROM daily_rankings r
          JOIN events e ON e.id = r.event_id
          WHERE r.run_date = ? AND r.status = "approved" AND e.review_status = "approved"
@@ -58,7 +58,7 @@ function published_rankings_for_date(string $runDate): array
 function rankings_for_date(string $runDate): array
 {
     $stmt = db()->prepare(
-        'SELECT r.*, e.year, e.title, e.description, e.category, e.region, e.source_url, e.review_status
+        'SELECT r.*, e.year, e.title, e.description, e.category, e.region, e.source_url, e.review_status, e.base_score
          FROM daily_rankings r
          JOIN events e ON e.id = r.event_id
          WHERE r.run_date = ?

@@ -84,11 +84,15 @@ function rank_events(array $events, array $topics, int $currentYear): array
 {
     $ranked = [];
     $categoryCounts = [];
+    $settings = scoring_settings();
 
     foreach ($events as $event) {
-        $components = score_event_components($event, $topics, $currentYear);
+        $components = score_event_components($event, $topics, $currentYear, $settings);
         $category = (string) $event['category'];
-        $diversityPenalty = min(8, ($categoryCounts[$category] ?? 0) * 4);
+        $diversityPenalty = min(
+            (float) $settings['diversity_max'],
+            ($categoryCounts[$category] ?? 0) * (float) $settings['diversity_penalty']
+        );
         $components['diversity'] = -$diversityPenalty;
         $score = array_sum($components);
         $reasons = build_score_reasons($event, $components, $currentYear);
@@ -99,6 +103,7 @@ function rank_events(array $events, array $topics, int $currentYear): array
             'score' => $score,
             'reasons' => $reasons,
             'context_summary' => build_context_summary($event, $reasons),
+            'components' => $components,
         ];
     }
 
@@ -107,11 +112,12 @@ function rank_events(array $events, array $topics, int $currentYear): array
     return $ranked;
 }
 
-function score_event_components(array $event, array $topics, int $currentYear): array
+function score_event_components(array $event, array $topics, int $currentYear, ?array $settings = null): array
 {
+    $settings = $settings ?: scoring_settings();
     $baseScore = max(0, min(100, (float) $event['base_score']));
     $components = [
-        'historical' => $baseScore * 0.45,
+        'historical' => $baseScore * (float) $settings['historical_weight'],
         'news' => 0.0,
         'anniversary' => 0.0,
         'category' => 0.0,
@@ -120,42 +126,42 @@ function score_event_components(array $event, array $topics, int $currentYear): 
 
     $anniversary = $currentYear - (int) $event['year'];
     if ($anniversary > 0) {
-        $components['anniversary'] = anniversary_score($anniversary);
+        $components['anniversary'] = anniversary_score($anniversary, $settings);
     }
 
-    $match = event_news_match_score($event, $topics);
+    $match = event_news_match_score($event, $topics, $settings);
     $components['news'] = $match['score'];
-    $components['category'] = category_context_score((string) $event['category'], $topics);
+    $components['category'] = category_context_score((string) $event['category'], $topics, $settings);
 
     return $components;
 }
 
-function anniversary_score(int $anniversary): float
+function anniversary_score(int $anniversary, array $settings): float
 {
     if (in_array($anniversary, [50, 100, 150, 200, 250, 500], true)) {
-        return 18.0;
+        return (float) $settings['anniversary_major'];
     }
 
     if (in_array($anniversary, [10, 25, 75], true)) {
-        return 10.0;
+        return (float) $settings['anniversary_named'];
     }
 
     if ($anniversary % 100 === 0) {
-        return 18.0;
+        return (float) $settings['anniversary_major'];
     }
 
     if ($anniversary % 50 === 0) {
-        return 14.0;
+        return (float) $settings['anniversary_medium'];
     }
 
     if ($anniversary % 25 === 0) {
-        return 8.0;
+        return (float) $settings['anniversary_minor'];
     }
 
     return 0.0;
 }
 
-function event_news_match_score(array $event, array $topics): array
+function event_news_match_score(array $event, array $topics, array $settings): array
 {
     $eventText = normalize_score_text(
         $event['title'] . ' ' . $event['description'] . ' ' . $event['category'] . ' ' . $event['region']
@@ -183,7 +189,11 @@ function event_news_match_score(array $event, array $topics): array
         }
     }
 
-    $score = min(32, ($matchedTopics * 6) + (count($matchedKeywords) * 3));
+    $score = min(
+        (float) $settings['news_max'],
+        ($matchedTopics * (float) $settings['news_topic_points']) +
+        (count($matchedKeywords) * (float) $settings['news_keyword_points'])
+    );
 
     return [
         'score' => (float) $score,
@@ -192,7 +202,7 @@ function event_news_match_score(array $event, array $topics): array
     ];
 }
 
-function category_context_score(string $category, array $topics): float
+function category_context_score(string $category, array $topics, array $settings): float
 {
     $category = normalize_score_text($category);
     if ($category === '') {
@@ -207,7 +217,10 @@ function category_context_score(string $category, array $topics): float
         }
     }
 
-    return (float) min(12, $matches * 4);
+    return (float) min(
+        (float) $settings['category_max'],
+        $matches * (float) $settings['category_points']
+    );
 }
 
 function topic_keywords(array $topic): array
@@ -254,4 +267,60 @@ function build_score_reasons(array $event, array $components, int $currentYear):
 function build_context_summary(array $event, array $reasons): string
 {
     return 'Este fato foi priorizado por ' . implode(', ', $reasons) . '.';
+}
+
+function scoring_setting_definitions(): array
+{
+    return [
+        'historical_weight' => ['label' => 'Peso da relevancia historica', 'default' => 0.45],
+        'news_topic_points' => ['label' => 'Pontos por noticia/topico conectado', 'default' => 6.0],
+        'news_keyword_points' => ['label' => 'Pontos por palavra-chave conectada', 'default' => 3.0],
+        'news_max' => ['label' => 'Limite maximo de pontos por noticias', 'default' => 32.0],
+        'anniversary_major' => ['label' => 'Bonus aniversario maior', 'default' => 18.0],
+        'anniversary_medium' => ['label' => 'Bonus aniversario medio', 'default' => 14.0],
+        'anniversary_minor' => ['label' => 'Bonus aniversario menor', 'default' => 8.0],
+        'anniversary_named' => ['label' => 'Bonus aniversario 10/25/75 anos', 'default' => 10.0],
+        'category_points' => ['label' => 'Pontos por categoria em pauta', 'default' => 4.0],
+        'category_max' => ['label' => 'Limite maximo da categoria', 'default' => 12.0],
+        'diversity_penalty' => ['label' => 'Penalidade por categoria repetida', 'default' => 4.0],
+        'diversity_max' => ['label' => 'Penalidade maxima de diversidade', 'default' => 8.0],
+    ];
+}
+
+function scoring_settings(): array
+{
+    $definitions = scoring_setting_definitions();
+    $settings = [];
+
+    foreach ($definitions as $key => $definition) {
+        $settings[$key] = (float) $definition['default'];
+    }
+
+    $rows = db()->query('SELECT setting_key, setting_value FROM scoring_settings')->fetchAll();
+    foreach ($rows as $row) {
+        if (array_key_exists($row['setting_key'], $settings)) {
+            $settings[$row['setting_key']] = (float) $row['setting_value'];
+        }
+    }
+
+    return $settings;
+}
+
+function update_scoring_settings(array $input): void
+{
+    $definitions = scoring_setting_definitions();
+    $stmt = db()->prepare(
+        'INSERT INTO scoring_settings (setting_key, setting_value, updated_at)
+         VALUES (?, ?, NOW())
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()'
+    );
+
+    foreach ($definitions as $key => $definition) {
+        if (!isset($input[$key])) {
+            continue;
+        }
+
+        $value = (float) str_replace(',', '.', (string) $input[$key]);
+        $stmt->execute([$key, $value]);
+    }
 }

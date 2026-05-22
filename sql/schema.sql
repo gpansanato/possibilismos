@@ -44,6 +44,12 @@ CREATE TABLE current_topics (
     INDEX idx_current_topics_date (run_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE scoring_settings (
+    setting_key VARCHAR(80) NOT NULL PRIMARY KEY,
+    setting_value DECIMAL(10,4) NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE daily_rankings (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     run_date DATE NOT NULL,
