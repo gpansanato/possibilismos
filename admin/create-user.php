@@ -25,17 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Preencha nome, email e senha com pelo menos 8 caracteres.';
     }
 }
+render_page_start('Criar primeiro usuario', 'admin', 'public', 'Configuracao inicial de acesso administrativo.');
 ?>
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Criar usuario</title>
-    <link rel="stylesheet" href="/public/style.css">
-</head>
-<body>
-<main class="page">
     <section class="panel">
         <h1>Criar primeiro usuario</h1>
         <?php if ($created): ?>
@@ -50,6 +41,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
         <?php endif; ?>
     </section>
-</main>
-</body>
-</html>
+<?php render_page_end(); ?>

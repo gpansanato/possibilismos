@@ -13,17 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $error = 'Login invalido.';
 }
+render_page_start('Entrar no admin', 'admin', 'public', 'Acesso restrito para curadoria e publicacao dos fatos do dia.');
 ?>
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Login</title>
-    <link rel="stylesheet" href="/public/style.css">
-</head>
-<body>
-<main class="page">
     <section class="panel">
         <h1>Admin</h1>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
@@ -33,6 +24,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit">Entrar</button>
         </form>
     </section>
-</main>
-</body>
-</html>
+<?php render_page_end(); ?>

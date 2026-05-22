@@ -3,24 +3,25 @@ require_once __DIR__ . '/../app/bootstrap.php';
 
 $today = today_key();
 $items = published_rankings_for_date($today['date']);
+render_page_start('Inicio', 'home', 'public', 'Selecao diaria de fatos historicos conectados aos temas atuais.');
 ?>
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= h($config['app_name']) ?></title>
-    <link rel="stylesheet" href="/public/style.css">
-</head>
-<body>
-    <main class="page">
-        <header class="topbar">
+        <section class="option-grid" aria-label="Opcoes de navegacao">
+            <a class="option-card" href="#fatos-de-hoje">
+                <span>Fatos de hoje</span>
+                <strong>Ver publicacoes aprovadas</strong>
+            </a>
+            <a class="option-card" href="/admin/login.php">
+                <span>Admin</span>
+                <strong>Acessar curadoria</strong>
+            </a>
+        </section>
+
+        <section id="fatos-de-hoje" class="section-heading">
             <div>
                 <p class="eyebrow"><?= h($today['date']) ?></p>
-                <h1>Fatos historicos em contexto</h1>
+                <h2>Fatos aprovados</h2>
             </div>
-            <a href="/admin/login.php">Admin</a>
-        </header>
+        </section>
 
         <?php if (!$items): ?>
             <section class="empty">
@@ -49,6 +50,4 @@ $items = published_rankings_for_date($today['date']);
                 </article>
             <?php endforeach; ?>
         </section>
-    </main>
-</body>
-</html>
+<?php render_page_end(); ?>

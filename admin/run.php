@@ -16,23 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = $e->getMessage();
     }
 }
+render_page_start('Rodar selecao diaria', 'run', 'admin', 'Executa coleta da internet, ranking e gravacao das sugestoes do dia.');
 ?>
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Rodar selecao</title>
-    <link rel="stylesheet" href="/public/style.css">
-</head>
-<body>
-<main class="page">
-    <nav class="nav">
-        <a href="/admin/dashboard.php">Hoje</a>
-        <a href="/admin/events.php">Eventos</a>
-        <a href="/admin/logout.php">Sair</a>
-    </nav>
-
     <section class="panel">
         <h1>Rodar selecao diaria</h1>
         <form method="post">
@@ -44,6 +29,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p><?= count($result) ?> eventos ranqueados. Antes da coleta havia <?= h((string) $eventsBefore) ?> eventos.</p>
         <?php endif; ?>
     </section>
-</main>
-</body>
-</html>
+<?php render_page_end(); ?>

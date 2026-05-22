@@ -4,25 +4,29 @@ require_admin();
 
 $today = today_key();
 $rankings = rankings_for_date($today['date']);
+render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de operacao e sugestoes geradas para hoje.');
 ?>
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dashboard</title>
-    <link rel="stylesheet" href="/public/style.css">
-</head>
-<body>
-<main class="page">
-    <nav class="nav">
-        <a href="/admin/dashboard.php">Hoje</a>
-        <a href="/admin/events.php">Eventos</a>
-        <a href="/admin/run.php">Rodar selecao</a>
-        <a href="/admin/logout.php">Sair</a>
-    </nav>
+    <section class="option-grid" aria-label="Opcoes administrativas">
+        <a class="option-card" href="/admin/run.php">
+            <span>Execucao diaria</span>
+            <strong>Coletar e ranquear agora</strong>
+        </a>
+        <a class="option-card" href="/admin/events.php">
+            <span>Base historica</span>
+            <strong>Cadastrar ou revisar eventos</strong>
+        </a>
+        <a class="option-card" href="/">
+            <span>Site publico</span>
+            <strong>Ver resultado publicado</strong>
+        </a>
+    </section>
 
-    <h1>Sugestoes de hoje</h1>
+    <section class="section-heading">
+        <div>
+            <p class="eyebrow"><?= h($today['date']) ?></p>
+            <h2>Sugestoes de hoje</h2>
+        </div>
+    </section>
     <?php if (!$rankings): ?>
         <section class="empty">
             <p>Nenhuma sugestao gerada. Rode a selecao diaria.</p>
@@ -47,6 +51,4 @@ $rankings = rankings_for_date($today['date']);
             </article>
         <?php endforeach; ?>
     </section>
-</main>
-</body>
-</html>
+<?php render_page_end(); ?>

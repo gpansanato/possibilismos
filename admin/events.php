@@ -24,23 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $events = db()->query('SELECT * FROM events ORDER BY event_month, event_day, year')->fetchAll();
+render_page_start('Eventos historicos', 'events', 'admin', 'Cadastro e revisao da base usada pela selecao diaria.');
 ?>
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Eventos</title>
-    <link rel="stylesheet" href="/public/style.css">
-</head>
-<body>
-<main class="page">
-    <nav class="nav">
-        <a href="/admin/dashboard.php">Hoje</a>
-        <a href="/admin/run.php">Rodar selecao</a>
-        <a href="/admin/logout.php">Sair</a>
-    </nav>
-
     <section class="panel">
         <h1>Novo evento historico</h1>
         <form class="form" method="post">
@@ -70,6 +55,4 @@ $events = db()->query('SELECT * FROM events ORDER BY event_month, event_day, yea
             </article>
         <?php endforeach; ?>
     </section>
-</main>
-</body>
-</html>
+<?php render_page_end(); ?>

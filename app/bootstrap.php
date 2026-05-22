@@ -5,6 +5,7 @@ date_default_timezone_set($config['timezone']);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/events.php';
 require_once __DIR__ . '/sources.php';
