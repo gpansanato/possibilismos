@@ -60,6 +60,11 @@ foreach (scoring_setting_definitions() as $key => $definition) {
     }
 }
 
+$today = today_key();
+$contextCountToday = table_exists('collected_contexts')
+    ? collected_contexts_count_for_date($today['date'])
+    : 0;
+
 render_page_start('Diagnostico do banco', 'db-check', 'admin', 'Verifica se o banco esta alinhado com as tabelas, colunas e parametros esperados pela aplicacao.');
 ?>
     <section class="panel">
@@ -88,6 +93,12 @@ render_page_start('Diagnostico do banco', 'db-check', 'admin', 'Verifica se o ba
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
+    </section>
+
+    <section class="panel">
+        <h1>Base higienizada</h1>
+        <p>Itens persistidos para hoje: <?= h((string) $contextCountToday) ?></p>
+        <p><a href="/admin/contexts.php">Abrir base higienizada</a></p>
     </section>
 
     <section class="panel">

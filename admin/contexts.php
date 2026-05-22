@@ -28,7 +28,14 @@ render_page_start('Base higienizada de contexto', 'contexts', 'admin', 'Noticias
             <p class="eyebrow"><?= count($items) ?> itens persistidos</p>
             <h2>Itens coletados</h2>
         </div>
+        <a class="button" href="/admin/collections.php">Executar coletas</a>
     </section>
+
+    <?php if (!$items): ?>
+        <section class="empty">
+            <p>Nenhum item persistido para os filtros selecionados. Execute a coleta de noticias, tendencias ou contexto completo.</p>
+        </section>
+    <?php endif; ?>
 
     <section class="list">
         <?php foreach ($items as $item): ?>

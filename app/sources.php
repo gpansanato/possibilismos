@@ -224,9 +224,7 @@ function current_topics_for_today(?string $runDate = null): array
         $topics = fallback_current_topics();
     }
 
-    foreach ($topics as $topic) {
-        save_current_topic($runDate, $topic);
-    }
+    persist_context_topics($runDate, $topics);
 
     return $topics;
 }
@@ -238,10 +236,12 @@ function collect_news_topics_for_date(string $runDate): array
 
     foreach ($topics as $topic) {
         save_collected_context($runDate, 'news', $topic);
-        save_current_topic($runDate, $topic);
     }
 
-    return collected_contexts_for_date($runDate, 'news');
+    $contexts = collected_contexts_for_date($runDate, 'news');
+    rebuild_current_topics_from_collected_contexts($runDate, 'news');
+
+    return $contexts;
 }
 
 function collect_trend_topics_for_date(string $runDate): array
@@ -251,10 +251,41 @@ function collect_trend_topics_for_date(string $runDate): array
 
     foreach ($topics as $topic) {
         save_collected_context($runDate, 'trend', $topic);
-        save_current_topic($runDate, $topic);
     }
 
-    return collected_contexts_for_date($runDate, 'trend');
+    $contexts = collected_contexts_for_date($runDate, 'trend');
+    rebuild_current_topics_from_collected_contexts($runDate, 'trend');
+
+    return $contexts;
+}
+
+function persist_context_topics(string $runDate, array $topics): void
+{
+    foreach ($topics as $topic) {
+        $type = strpos((string) ($topic['source'] ?? ''), 'trend:') === 0 ? 'trend' : 'news';
+        save_collected_context($runDate, $type, $topic);
+    }
+
+    rebuild_current_topics_from_collected_contexts($runDate);
+}
+
+function rebuild_current_topics_from_collected_contexts(string $runDate, ?string $type = null): void
+{
+    if ($type === 'news') {
+        db()->prepare('DELETE FROM current_topics WHERE run_date = ? AND source LIKE "rss:%"')->execute([$runDate]);
+    } elseif ($type === 'trend') {
+        db()->prepare('DELETE FROM current_topics WHERE run_date = ? AND source LIKE "trend:%"')->execute([$runDate]);
+    } else {
+        db()->prepare('DELETE FROM current_topics WHERE run_date = ?')->execute([$runDate]);
+    }
+
+    foreach (collected_contexts_for_date($runDate, $type) as $context) {
+        save_current_topic($runDate, [
+            'title' => $context['title'],
+            'keywords' => $context['keywords'],
+            'source' => $context['source'],
+        ]);
+    }
 }
 
 function save_current_topic(string $runDate, array $topic): void

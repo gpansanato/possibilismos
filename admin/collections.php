@@ -79,6 +79,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza as coletas do M
         </p>
         <p>Noticias persistidas: <?= h((string) $newsCount) ?></p>
         <p>Tendencias persistidas: <?= h((string) $trendCount) ?></p>
+        <p><a href="/admin/contexts.php">Ver base higienizada de contexto</a></p>
     </section>
 
     <?php if ($items): ?>
