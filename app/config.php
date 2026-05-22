@@ -5,10 +5,10 @@ $config = [
     'timezone' => 'America/Sao_Paulo',
 
     'db' => [
-        'host' => 'localhost',
-        'name' => 'NOME_DO_BANCO',
-        'user' => 'USUARIO_DO_BANCO',
-        'pass' => 'SENHA_DO_BANCO',
+        'host' => 'mysql.panblan.com.br',
+        'name' => 'panblan',
+        'user' => 'panblan',
+        'pass' => 'meuposs1bilism0',
         'charset' => 'utf8mb4',
     ],
 
@@ -17,7 +17,7 @@ $config = [
     ],
 
     'cron' => [
-        'token' => 'TROQUE_ESTE_TOKEN',
+        'token' => '12312312312312312312312312312312a3333734534',
         'default_limit' => 5,
     ],
 ];
