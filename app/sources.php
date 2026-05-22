@@ -127,8 +127,8 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
 
     $stmt = db()->prepare(
         'INSERT INTO events
-         (event_month, event_day, year, title, description, category, region, source_url, base_score, active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())'
+         (event_month, event_day, year, title, description, category, region, source_url, base_score, review_status, active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", 0, NOW())'
     );
 
     $stmt->execute([

@@ -24,9 +24,9 @@ render_page_start('Rodar selecao diaria', 'run', 'admin', 'Executa coleta da int
             <button type="submit">Executar agora</button>
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
-        <p>Eventos cadastrados para hoje: <?= h((string) $eventsAfter) ?></p>
+        <p>Eventos aprovados para hoje: <?= h((string) $eventsAfter) ?></p>
         <?php if ($result !== null): ?>
-            <p><?= count($result) ?> eventos ranqueados. Antes da coleta havia <?= h((string) $eventsBefore) ?> eventos.</p>
+            <p><?= count($result) ?> eventos ranqueados. Antes da coleta havia <?= h((string) $eventsBefore) ?> eventos aprovados.</p>
         <?php endif; ?>
     </section>
 <?php render_page_end(); ?>

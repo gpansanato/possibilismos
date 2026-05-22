@@ -5,8 +5,8 @@ require_admin();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = db()->prepare(
         'INSERT INTO events
-         (event_month, event_day, year, title, description, category, region, source_url, base_score, active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())'
+         (event_month, event_day, year, title, description, category, region, source_url, base_score, review_status, active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", 0, NOW())'
     );
     $stmt->execute([
         (int) $_POST['event_month'],
@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('/admin/events.php');
 }
 
-render_page_start('Novo evento historico', 'event-new', 'admin', 'Cadastro manual de um evento para compor a base historica.');
+render_page_start('Novo evento historico', 'event-new', 'admin', 'Cadastro manual de um evento. Todo novo evento entra como nao avaliado.');
 ?>
     <section class="panel">
         <h1>Dados do evento</h1>

@@ -15,3 +15,5 @@ if (session_status() === PHP_SESSION_NONE) {
     session_name($config['admin']['session_name']);
     session_start();
 }
+
+ensure_event_review_status_schema();

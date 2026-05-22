@@ -23,6 +23,24 @@ sql/       Schema inicial
 7. Cadastre eventos em `/admin/events.php`.
 8. Rode `/admin/run.php` ou configure o CronJob para chamar `cron/daily.php`.
 
+## Migracoes
+
+Em bancos ja publicados, aplique os arquivos em `sql/migrations/` antes de sincronizar codigo que depende de novas colunas.
+
+Migracao atual:
+
+```text
+sql/migrations/2026_05_22_event_review_status.sql
+```
+
+Ela cria o estado editorial dos eventos:
+
+```text
+pending   Nao avaliado
+approved  Aprovado
+rejected  Reprovado
+```
+
 ## CronJob
 
 Configure uma execucao diaria para:

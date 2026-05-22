@@ -204,6 +204,13 @@ a {
     margin-top: 14px;
 }
 
+.filter-form {
+    display: grid;
+    grid-template-columns: 180px 100px 100px minmax(220px, 1fr) auto auto;
+    align-items: end;
+    gap: 12px;
+}
+
 .status-badge {
     display: inline-flex;
     align-items: center;
@@ -216,6 +223,11 @@ a {
 .status-badge.is-approved {
     color: #027a48;
     background: #ecfdf3;
+}
+
+.status-badge.is-pending {
+    color: #6941c6;
+    background: #f4f3ff;
 }
 
 .status-badge.is-rejected {
@@ -262,6 +274,11 @@ button,
     cursor: pointer;
 }
 
+.button-secondary {
+    color: #344054;
+    background: #eef2f6;
+}
+
 .danger {
     background: #b42318;
 }
@@ -300,6 +317,10 @@ button,
     }
 
     .option-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-form {
         grid-template-columns: 1fr;
     }
 

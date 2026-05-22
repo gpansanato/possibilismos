@@ -20,8 +20,8 @@ try {
     echo json_encode([
         'ok' => true,
         'count' => count($items),
-        'events_before' => $eventsBefore,
-        'events_after' => $eventsAfter,
+        'approved_events_before' => $eventsBefore,
+        'approved_events_after' => $eventsAfter,
         'date' => $today['date'],
     ]);
 } catch (Throwable $e) {

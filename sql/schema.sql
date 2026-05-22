@@ -17,9 +17,11 @@ CREATE TABLE events (
     region VARCHAR(120) NOT NULL,
     source_url VARCHAR(500) NULL,
     base_score DECIMAL(5,2) NOT NULL DEFAULT 50.00,
-    active TINYINT(1) NOT NULL DEFAULT 1,
+    review_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    active TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL,
     INDEX idx_events_day (event_month, event_day),
+    INDEX idx_events_review_status (review_status),
     INDEX idx_events_active (active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

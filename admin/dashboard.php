@@ -45,7 +45,11 @@ render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de ope
                     <h2><?= h($item['title']) ?></h2>
                     <p><?= h($item['description']) ?></p>
                     <p class="context"><?= h($item['context_summary']) ?></p>
-                    <p class="meta">Status: <?= h($item['status']) ?> | Score: <?= h(number_format((float) $item['score'], 1)) ?></p>
+                    <p class="meta">
+                        Publicacao: <?= h($item['status']) ?> |
+                        Evento: <?= h(event_review_status_label($item['review_status'])) ?> |
+                        Score: <?= h(number_format((float) $item['score'], 1)) ?>
+                    </p>
                     <form method="post" action="/admin/update-ranking.php">
                         <input type="hidden" name="id" value="<?= h($item['id']) ?>">
                         <button name="status" value="approved" type="submit">Aprovar</button>
