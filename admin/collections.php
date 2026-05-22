@@ -40,6 +40,44 @@ $eventCounts = events_count_by_review_status($today['month'], $today['day']);
 $newsCount = collected_contexts_count_for_date($today['date'], 'news');
 $trendCount = collected_contexts_count_for_date($today['date'], 'trend');
 $topicsCount = current_topics_count_for_date($today['date']);
+$rankingCount = rankings_count_for_date($today['date']);
+$collectionRows = [
+    [
+        'date' => $today['date'],
+        'name' => 'Eventos historicos',
+        'status' => ($eventCounts['pending'] + $eventCounts['approved'] + $eventCounts['rejected']) > 0 ? 'Concluida' : 'Pendente',
+        'count' => $eventCounts['pending'] + $eventCounts['approved'] + $eventCounts['rejected'],
+        'detail' => $eventCounts['pending'] . ' nao avaliados, ' . $eventCounts['approved'] . ' aprovados, ' . $eventCounts['rejected'] . ' reprovados',
+    ],
+    [
+        'date' => $today['date'],
+        'name' => 'Noticias',
+        'status' => $newsCount > 0 ? 'Concluida' : 'Pendente',
+        'count' => $newsCount,
+        'detail' => 'Itens higienizados em collected_contexts',
+    ],
+    [
+        'date' => $today['date'],
+        'name' => 'Tendencias',
+        'status' => $trendCount > 0 ? 'Concluida' : 'Pendente',
+        'count' => $trendCount,
+        'detail' => 'GDELT, Media Cloud, Wikimedia, Agencia Brasil e Hacker News',
+    ],
+    [
+        'date' => $today['date'],
+        'name' => 'Topicos do score',
+        'status' => $topicsCount > 0 ? 'Disponivel' : 'Pendente',
+        'count' => $topicsCount,
+        'detail' => 'Registros operacionais em current_topics',
+    ],
+    [
+        'date' => $today['date'],
+        'name' => 'Score aplicado',
+        'status' => $rankingCount > 0 ? 'Concluida' : 'Pendente',
+        'count' => $rankingCount,
+        'detail' => 'Registros salvos em daily_rankings',
+    ],
+];
 
 render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individuais, contexto e execucao completa do processo diario.');
 ?>
@@ -84,20 +122,44 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individ
     <?php if ($message): ?><section class="panel"><p><?= h($message) ?></p></section><?php endif; ?>
 
     <section class="panel">
-        <h1>Resumo de hoje</h1>
-        <p>
-            Eventos: <?= h((string) $eventCounts['pending']) ?> nao avaliados,
-            <?= h((string) $eventCounts['approved']) ?> aprovados,
-            <?= h((string) $eventCounts['rejected']) ?> reprovados.
-        </p>
-        <p>Noticias persistidas: <?= h((string) $newsCount) ?></p>
-        <p>Tendencias persistidas: <?= h((string) $trendCount) ?></p>
-        <p>Topicos operacionais no score: <?= h((string) $topicsCount) ?></p>
-        <p>Fontes de tendencias: GDELT, Media Cloud, Wikimedia Pageviews, Agencia Brasil RSS e Hacker News.</p>
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow"><?= h($today['date']) ?></p>
+                <h2>Status das coletas</h2>
+            </div>
+            <a class="button button-secondary" href="/admin/contexts.php">Base higienizada</a>
+        </div>
+        <div class="table-wrap table-wrap--plain">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Coleta</th>
+                        <th>Status</th>
+                        <th>Registros</th>
+                        <th>Detalhe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($collectionRows as $row): ?>
+                        <tr>
+                            <td data-label="Data"><?= h($row['date']) ?></td>
+                            <td data-label="Coleta"><strong><?= h($row['name']) ?></strong></td>
+                            <td data-label="Status">
+                                <span class="status-badge <?= $row['count'] > 0 ? 'is-approved' : 'is-pending' ?>">
+                                    <?= h($row['status']) ?>
+                                </span>
+                            </td>
+                            <td data-label="Registros"><?= h((string) $row['count']) ?></td>
+                            <td data-label="Detalhe"><?= h($row['detail']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
         <?php if ($rankingResult !== null): ?>
             <p>Antes da execucao completa havia <?= h((string) $eventsBefore) ?> eventos aprovados para hoje.</p>
         <?php endif; ?>
-        <p><a href="/admin/contexts.php">Ver base higienizada de contexto</a></p>
     </section>
 
     <?php if ($items): ?>

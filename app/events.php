@@ -104,6 +104,14 @@ function current_topics_count_for_date_and_source(string $runDate, string $prefi
     return (int) $stmt->fetchColumn();
 }
 
+function rankings_count_for_date(string $runDate): int
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM daily_rankings WHERE run_date = ?');
+    $stmt->execute([$runDate]);
+
+    return (int) $stmt->fetchColumn();
+}
+
 function events_count_by_review_status(?int $month = null, ?int $day = null): array
 {
     $where = [];
