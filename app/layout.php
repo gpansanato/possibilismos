@@ -24,7 +24,7 @@ function nav_items(string $area): array
     ];
 }
 
-function render_page_start(string $title, string $active = 'home', string $area = 'public', ?string $subtitle = null): void
+function render_page_start(string $title, string $active = 'home', string $area = 'public', ?string $subtitle = null, bool $showHeading = true): void
 {
     $config = require __DIR__ . '/config.php';
     ?>
@@ -58,13 +58,15 @@ function render_page_start(string $title, string $active = 'home', string $area 
     </header>
 
     <main class="page">
-        <header class="page-heading">
-            <p class="eyebrow"><?= h($area === 'admin' ? 'Administracao' : 'Publico') ?></p>
-            <h1><?= h($title) ?></h1>
-            <?php if ($subtitle): ?>
-                <p><?= h($subtitle) ?></p>
-            <?php endif; ?>
-        </header>
+        <?php if ($showHeading): ?>
+            <header class="page-heading">
+                <p class="eyebrow"><?= h($area === 'admin' ? 'Administracao' : 'Publico') ?></p>
+                <h1><?= h($title) ?></h1>
+                <?php if ($subtitle): ?>
+                    <p><?= h($subtitle) ?></p>
+                <?php endif; ?>
+            </header>
+        <?php endif; ?>
     <?php
 }
 
@@ -72,6 +74,20 @@ function render_page_end(): void
 {
     ?>
     </main>
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <div>
+                <strong>Possibilismos</strong>
+                <p>Curadoria historica conectada ao contexto atual.</p>
+            </div>
+            <nav aria-label="Links de rodape">
+                <a href="/">Produto</a>
+                <a href="/#fatos-de-hoje">Publicacoes</a>
+                <a href="/admin/login.php">Admin</a>
+                <a href="/admin/db-check.php">Status</a>
+            </nav>
+        </div>
+    </footer>
 </body>
 </html>
     <?php
