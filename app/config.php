@@ -20,6 +20,16 @@ $config = [
         'token' => 'TROQUE_ESTE_TOKEN',
         'default_limit' => 5,
     ],
+
+    'sources' => [
+        'wikimedia' => [
+            'enabled' => true,
+            'languages' => ['pt', 'en'],
+            'types' => ['selected', 'events'],
+            'max_import' => 30,
+            'user_agent' => 'PossibilismosMVP/0.1 (https://panblan.com.br)',
+        ],
+    ],
 ];
 
 $localConfig = __DIR__ . '/config.local.php';

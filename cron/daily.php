@@ -13,11 +13,16 @@ if (!hash_equals($config['cron']['token'], $token)) {
 header('Content-Type: application/json; charset=utf-8');
 
 try {
+    $today = today_key();
+    $eventsBefore = events_count_for_day($today['month'], $today['day']);
     $items = run_daily_ranking();
+    $eventsAfter = events_count_for_day($today['month'], $today['day']);
     echo json_encode([
         'ok' => true,
         'count' => count($items),
-        'date' => today_key()['date'],
+        'events_before' => $eventsBefore,
+        'events_after' => $eventsAfter,
+        'date' => $today['date'],
     ]);
 } catch (Throwable $e) {
     http_response_code(500);

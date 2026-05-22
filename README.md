@@ -38,3 +38,14 @@ O token deve ser o mesmo configurado em `app/config.php`.
 - Integrar RSS real de noticias em `app/sources.php`.
 - Melhorar ranking com API de IA externa.
 - Adicionar aprovacao em lote e historico por data.
+
+## Coleta Inicial
+
+A rotina diaria importa eventos historicos da API publica Wikimedia "On this day" antes de ranquear.
+Por padrao, o sistema tenta Wikipedia em portugues e depois ingles, usando eventos `selected` e, se necessario, `events`.
+
+Fonte tecnica:
+
+```text
+https://api.wikimedia.org/feed/v1/wikipedia/{language}/onthisday/{type}/{MM}/{DD}
+```

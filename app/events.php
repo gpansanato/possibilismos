@@ -10,6 +10,14 @@ function events_for_day(int $month, int $day): array
     return $stmt->fetchAll();
 }
 
+function events_count_for_day(int $month, int $day): int
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM events WHERE event_month = ? AND event_day = ? AND active = 1');
+    $stmt->execute([$month, $day]);
+
+    return (int) $stmt->fetchColumn();
+}
+
 function published_rankings_for_date(string $runDate): array
 {
     $stmt = db()->prepare(
