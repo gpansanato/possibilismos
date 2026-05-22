@@ -15,6 +15,8 @@ $settings = scoring_settings();
 $definitions = scoring_setting_definitions();
 $rankings = rankings_for_date($runDate);
 $topics = topics_for_date($runDate);
+$newsCount = current_topics_count_for_date_and_source($runDate, 'rss');
+$trendsCount = current_topics_count_for_date_and_source($runDate, 'trend');
 $currentYear = (int) substr($runDate, 0, 4);
 
 render_page_start('Prioridade dos fatos', 'priority', 'admin', 'Lista os fatos relevantes obtidos e detalha como o score de prioridade e calculado.');
@@ -35,7 +37,12 @@ render_page_start('Prioridade dos fatos', 'priority', 'admin', 'Lista os fatos r
 
     <section class="section-heading">
         <div>
-            <p class="eyebrow"><?= h($runDate) ?> | <?= count($rankings) ?> fatos ranqueados | <?= count($topics) ?> topicos/noticias</p>
+            <p class="eyebrow">
+                <?= h($runDate) ?> |
+                <?= count($rankings) ?> fatos ranqueados |
+                <?= h((string) $newsCount) ?> noticias |
+                <?= h((string) $trendsCount) ?> tendencias
+            </p>
             <h2>Fatos relevantes obtidos</h2>
         </div>
         <form class="inline-filter" method="get">
@@ -83,6 +90,7 @@ render_page_start('Prioridade dos fatos', 'priority', 'admin', 'Lista os fatos r
                     <div class="score-grid">
                         <span>Historico: <?= h(number_format($components['historical'], 1)) ?></span>
                         <span>Noticias: <?= h(number_format($components['news'], 1)) ?></span>
+                        <span>Tendencias: <?= h(number_format($components['trends'], 1)) ?></span>
                         <span>Aniversario: <?= h(number_format($components['anniversary'], 1)) ?></span>
                         <span>Categoria: <?= h(number_format($components['category'], 1)) ?></span>
                         <span>Diversidade: <?= h(number_format($components['diversity'], 1)) ?></span>

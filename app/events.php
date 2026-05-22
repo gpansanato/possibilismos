@@ -77,6 +77,14 @@ function current_topics_count_for_date(string $runDate): int
     return (int) $stmt->fetchColumn();
 }
 
+function current_topics_count_for_date_and_source(string $runDate, string $prefix): int
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM current_topics WHERE run_date = ? AND source LIKE ?');
+    $stmt->execute([$runDate, $prefix . ':%']);
+
+    return (int) $stmt->fetchColumn();
+}
+
 function events_count_by_review_status(?int $month = null, ?int $day = null): array
 {
     $where = [];

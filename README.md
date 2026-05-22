@@ -80,6 +80,7 @@ O score de priorizacao combina:
 ```text
 relevancia historica       peso principal, a partir de base_score
 conexao com noticias       termos dos eventos comparados a noticias do dia
+conexao com tendencias     termos dos eventos comparados a tendencias do dia
 aniversario significativo  10, 25, 50, 100 anos e multiplos relevantes
 categoria em pauta         categoria do evento presente nos topicos atuais
 diversidade editorial      pequeno ajuste para evitar repeticao de categoria
@@ -90,6 +91,7 @@ No admin, o processo pode ser operado em etapas:
 ```text
 /admin/collect-events.php  Coleta eventos historicos do dia
 /admin/collect-news.php    Coleta noticias e topicos do dia
+/admin/collect-trends.php  Coleta tendencias do dia
 /admin/apply-score.php     Aplica o score de prioridade
 /admin/priority.php        Lista fatos ranqueados e parametros do score
 /admin/run.php             Executa o processo completo

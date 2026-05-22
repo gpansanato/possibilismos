@@ -48,6 +48,21 @@ $config = [
                 ],
             ],
         ],
+        'trends' => [
+            'enabled' => true,
+            'max_items' => 20,
+            'min_keyword_length' => 3,
+            'feeds' => [
+                [
+                    'name' => 'Google Trends Brasil',
+                    'url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=BR',
+                ],
+                [
+                    'name' => 'Google Trends Global',
+                    'url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=US',
+                ],
+            ],
+        ],
     ],
 ];
 

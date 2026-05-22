@@ -8,17 +8,31 @@ function run_daily_ranking(?string $runDate = null, ?int $limit = null): array
     $limit = $limit ?: (int) $config['cron']['default_limit'];
 
     import_historical_events_for_today();
-    collect_daily_news_topics($runDate);
+    collect_daily_context_topics($runDate);
 
     return apply_daily_priority_score($runDate, $limit);
 }
 
-function collect_daily_news_topics(?string $runDate = null): array
+function collect_daily_context_topics(?string $runDate = null): array
 {
     $runDate = $runDate ?: today_key()['date'];
     db()->prepare('DELETE FROM current_topics WHERE run_date = ?')->execute([$runDate]);
 
     return current_topics_for_today($runDate);
+}
+
+function collect_daily_news_topics(?string $runDate = null): array
+{
+    $runDate = $runDate ?: today_key()['date'];
+
+    return collect_news_topics_for_date($runDate);
+}
+
+function collect_daily_trend_topics(?string $runDate = null): array
+{
+    $runDate = $runDate ?: today_key()['date'];
+
+    return collect_trend_topics_for_date($runDate);
 }
 
 function apply_daily_priority_score(?string $runDate = null, ?int $limit = null): array
@@ -41,7 +55,7 @@ function apply_daily_priority_score(?string $runDate = null, ?int $limit = null)
 
         $topics = topics_for_date($runDate);
         if (!$topics) {
-            $topics = collect_daily_news_topics($runDate);
+            $topics = collect_daily_context_topics($runDate);
         }
 
         $events = events_for_day($today['month'], $today['day']);
@@ -119,6 +133,7 @@ function score_event_components(array $event, array $topics, int $currentYear, ?
     $components = [
         'historical' => $baseScore * (float) $settings['historical_weight'],
         'news' => 0.0,
+        'trends' => 0.0,
         'anniversary' => 0.0,
         'category' => 0.0,
         'diversity' => 0.0,
@@ -129,8 +144,9 @@ function score_event_components(array $event, array $topics, int $currentYear, ?
         $components['anniversary'] = anniversary_score($anniversary, $settings);
     }
 
-    $match = event_news_match_score($event, $topics, $settings);
-    $components['news'] = $match['score'];
+    $match = event_context_match_score($event, $topics, $settings);
+    $components['news'] = $match['news_score'];
+    $components['trends'] = $match['trend_score'];
     $components['category'] = category_context_score((string) $event['category'], $topics, $settings);
 
     return $components;
@@ -161,13 +177,15 @@ function anniversary_score(int $anniversary, array $settings): float
     return 0.0;
 }
 
-function event_news_match_score(array $event, array $topics, array $settings): array
+function event_context_match_score(array $event, array $topics, array $settings): array
 {
     $eventText = normalize_score_text(
         $event['title'] . ' ' . $event['description'] . ' ' . $event['category'] . ' ' . $event['region']
     );
-    $matchedTopics = 0;
-    $matchedKeywords = [];
+    $matchedNewsTopics = 0;
+    $matchedNewsKeywords = [];
+    $matchedTrendTopics = 0;
+    $matchedTrendKeywords = [];
 
     foreach ($topics as $topic) {
         $keywords = topic_keywords($topic);
@@ -180,26 +198,47 @@ function event_news_match_score(array $event, array $topics, array $settings): a
 
             if (mb_strpos($eventText, $keyword, 0, 'UTF-8') !== false) {
                 $topicMatches++;
-                $matchedKeywords[$keyword] = true;
+                if (source_is_trend($topic['source'] ?? '')) {
+                    $matchedTrendKeywords[$keyword] = true;
+                } else {
+                    $matchedNewsKeywords[$keyword] = true;
+                }
             }
         }
 
         if ($topicMatches > 0) {
-            $matchedTopics++;
+            if (source_is_trend($topic['source'] ?? '')) {
+                $matchedTrendTopics++;
+            } else {
+                $matchedNewsTopics++;
+            }
         }
     }
 
-    $score = min(
+    $newsScore = min(
         (float) $settings['news_max'],
-        ($matchedTopics * (float) $settings['news_topic_points']) +
-        (count($matchedKeywords) * (float) $settings['news_keyword_points'])
+        ($matchedNewsTopics * (float) $settings['news_topic_points']) +
+        (count($matchedNewsKeywords) * (float) $settings['news_keyword_points'])
+    );
+    $trendScore = min(
+        (float) $settings['trend_max'],
+        ($matchedTrendTopics * (float) $settings['trend_topic_points']) +
+        (count($matchedTrendKeywords) * (float) $settings['trend_keyword_points'])
     );
 
     return [
-        'score' => (float) $score,
-        'topics' => $matchedTopics,
-        'keywords' => array_keys($matchedKeywords),
+        'news_score' => (float) $newsScore,
+        'trend_score' => (float) $trendScore,
+        'news_topics' => $matchedNewsTopics,
+        'trend_topics' => $matchedTrendTopics,
+        'news_keywords' => array_keys($matchedNewsKeywords),
+        'trend_keywords' => array_keys($matchedTrendKeywords),
     ];
+}
+
+function source_is_trend(string $source): bool
+{
+    return substr($source, 0, 6) === 'trend:';
 }
 
 function category_context_score(string $category, array $topics, array $settings): float
@@ -248,6 +287,10 @@ function build_score_reasons(array $event, array $components, int $currentYear):
         $reasons[] = 'conexao com noticias do dia +' . number_format($components['news'], 1);
     }
 
+    if ($components['trends'] > 0) {
+        $reasons[] = 'conexao com tendencias do dia +' . number_format($components['trends'], 1);
+    }
+
     if ($components['anniversary'] > 0) {
         $anniversary = $currentYear - (int) $event['year'];
         $reasons[] = 'aniversario de ' . $anniversary . ' anos';
@@ -276,6 +319,9 @@ function scoring_setting_definitions(): array
         'news_topic_points' => ['label' => 'Pontos por noticia/topico conectado', 'default' => 6.0],
         'news_keyword_points' => ['label' => 'Pontos por palavra-chave conectada', 'default' => 3.0],
         'news_max' => ['label' => 'Limite maximo de pontos por noticias', 'default' => 32.0],
+        'trend_topic_points' => ['label' => 'Pontos por tendencia conectada', 'default' => 8.0],
+        'trend_keyword_points' => ['label' => 'Pontos por palavra-chave de tendencia', 'default' => 4.0],
+        'trend_max' => ['label' => 'Limite maximo de pontos por tendencias', 'default' => 28.0],
         'anniversary_major' => ['label' => 'Bonus aniversario maior', 'default' => 18.0],
         'anniversary_medium' => ['label' => 'Bonus aniversario medio', 'default' => 14.0],
         'anniversary_minor' => ['label' => 'Bonus aniversario menor', 'default' => 8.0],

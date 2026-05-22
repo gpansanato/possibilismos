@@ -215,7 +215,10 @@ function infer_event_region(array $event, string $language): string
 function current_topics_for_today(?string $runDate = null): array
 {
     $runDate = $runDate ?: today_key()['date'];
-    $topics = fetch_current_news_topics($runDate);
+    $topics = array_merge(
+        fetch_current_news_topics($runDate),
+        fetch_current_trend_topics($runDate)
+    );
 
     if (!$topics) {
         $topics = fallback_current_topics();
@@ -235,6 +238,44 @@ function current_topics_for_today(?string $runDate = null): array
     }
 
     return $topics;
+}
+
+function collect_news_topics_for_date(string $runDate): array
+{
+    db()->prepare('DELETE FROM current_topics WHERE run_date = ? AND source LIKE "rss:%"')->execute([$runDate]);
+    $topics = fetch_current_news_topics($runDate);
+
+    foreach ($topics as $topic) {
+        save_current_topic($runDate, $topic);
+    }
+
+    return $topics;
+}
+
+function collect_trend_topics_for_date(string $runDate): array
+{
+    db()->prepare('DELETE FROM current_topics WHERE run_date = ? AND source LIKE "trend:%"')->execute([$runDate]);
+    $topics = fetch_current_trend_topics($runDate);
+
+    foreach ($topics as $topic) {
+        save_current_topic($runDate, $topic);
+    }
+
+    return $topics;
+}
+
+function save_current_topic(string $runDate, array $topic): void
+{
+    $stmt = db()->prepare(
+        'INSERT INTO current_topics (run_date, title, keywords, source, created_at)
+         VALUES (?, ?, ?, ?, NOW())'
+    );
+    $stmt->execute([
+        $runDate,
+        $topic['title'],
+        $topic['keywords'],
+        $topic['source'],
+    ]);
 }
 
 function fetch_current_news_topics(string $runDate): array
@@ -275,6 +316,51 @@ function fetch_current_news_topics(string $runDate): array
                 'title' => $item['title'],
                 'keywords' => implode(' ', $keywords),
                 'source' => 'rss:' . ($feed['name'] ?? 'news'),
+            ];
+        }
+    }
+
+    return $topics;
+}
+
+function fetch_current_trend_topics(string $runDate): array
+{
+    $config = require __DIR__ . '/config.php';
+    $settings = $config['sources']['trends'] ?? [];
+
+    if (empty($settings['enabled'])) {
+        return [];
+    }
+
+    $topics = [];
+    $maxItems = (int) ($settings['max_items'] ?? 20);
+    $feeds = $settings['feeds'] ?? [];
+
+    foreach ($feeds as $feed) {
+        if (count($topics) >= $maxItems) {
+            break;
+        }
+
+        $body = http_get_json($feed['url'], $config['sources']['wikimedia']['user_agent'] ?? 'PossibilismosMVP/0.1');
+        if (!$body) {
+            continue;
+        }
+
+        foreach (parse_rss_items($body) as $item) {
+            if (count($topics) >= $maxItems) {
+                break 2;
+            }
+
+            $text = trim($item['title'] . ' ' . $item['description']);
+            $keywords = extract_news_keywords($text, (int) ($settings['min_keyword_length'] ?? 3));
+            if (!$keywords) {
+                $keywords = [normalize_score_text($item['title'])];
+            }
+
+            $topics[] = [
+                'title' => $item['title'],
+                'keywords' => implode(' ', $keywords),
+                'source' => 'trend:' . ($feed['name'] ?? 'Google Trends'),
             ];
         }
     }

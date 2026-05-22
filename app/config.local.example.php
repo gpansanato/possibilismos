@@ -19,5 +19,8 @@ return [
         'news' => [
             'enabled' => true,
         ],
+        'trends' => [
+            'enabled' => true,
+        ],
     ],
 ];

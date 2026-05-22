@@ -7,12 +7,16 @@ $error = null;
 $today = today_key();
 $approvedEvents = events_count_for_day($today['month'], $today['day']);
 $topicsCount = current_topics_count_for_date($today['date']);
+$newsCount = current_topics_count_for_date_and_source($today['date'], 'rss');
+$trendsCount = current_topics_count_for_date_and_source($today['date'], 'trend');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $result = apply_daily_priority_score($today['date']);
         $approvedEvents = events_count_for_day($today['month'], $today['day']);
         $topicsCount = current_topics_count_for_date($today['date']);
+        $newsCount = current_topics_count_for_date_and_source($today['date'], 'rss');
+        $trendsCount = current_topics_count_for_date_and_source($today['date'], 'trend');
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -27,7 +31,7 @@ render_page_start('Aplicar score de prioridade', 'apply-score', 'admin', 'Calcul
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
         <p>Eventos aprovados para hoje: <?= h((string) $approvedEvents) ?></p>
-        <p>Topicos/noticias disponiveis: <?= h((string) $topicsCount) ?></p>
+        <p>Contextos disponiveis: <?= h((string) $topicsCount) ?> no total, <?= h((string) $newsCount) ?> noticias, <?= h((string) $trendsCount) ?> tendencias.</p>
         <?php if ($result !== null): ?><p><?= count($result) ?> eventos ranqueados.</p><?php endif; ?>
     </section>
 
