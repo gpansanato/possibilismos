@@ -92,9 +92,12 @@ No admin, o processo pode ser operado em etapas:
 /admin/collect-events.php  Coleta eventos historicos do dia
 /admin/collect-news.php    Coleta noticias e topicos do dia
 /admin/collect-trends.php  Coleta tendencias do dia
+/admin/contexts.php        Lista noticias e tendencias persistidas
 /admin/apply-score.php     Aplica o score de prioridade
 /admin/priority.php        Lista fatos ranqueados e parametros do score
 /admin/run.php             Executa o processo completo
 ```
 
 A coleta de tendencias usa o RSS do Google Trends quando disponivel. Se a fonte falhar ou retornar vazio, o MVP deriva tendencias a partir dos termos mais frequentes nas noticias coletadas do dia, salvando esses itens como `trend:derived-news`.
+
+Noticias e tendencias coletadas tambem sao persistidas em `collected_contexts`, com chave unica por data, tipo, fonte e titulo normalizado. A tabela `current_topics` fica como area operacional para o score; `collected_contexts` e a base higienizada/auditavel.

@@ -225,16 +225,7 @@ function current_topics_for_today(?string $runDate = null): array
     }
 
     foreach ($topics as $topic) {
-        $stmt = db()->prepare(
-            'INSERT INTO current_topics (run_date, title, keywords, source, created_at)
-             VALUES (?, ?, ?, ?, NOW())'
-        );
-        $stmt->execute([
-            $runDate,
-            $topic['title'],
-            $topic['keywords'],
-            $topic['source'],
-        ]);
+        save_current_topic($runDate, $topic);
     }
 
     return $topics;
@@ -246,10 +237,11 @@ function collect_news_topics_for_date(string $runDate): array
     $topics = fetch_current_news_topics($runDate);
 
     foreach ($topics as $topic) {
+        save_collected_context($runDate, 'news', $topic);
         save_current_topic($runDate, $topic);
     }
 
-    return $topics;
+    return collected_contexts_for_date($runDate, 'news');
 }
 
 function collect_trend_topics_for_date(string $runDate): array
@@ -258,10 +250,11 @@ function collect_trend_topics_for_date(string $runDate): array
     $topics = fetch_current_trend_topics($runDate);
 
     foreach ($topics as $topic) {
+        save_collected_context($runDate, 'trend', $topic);
         save_current_topic($runDate, $topic);
     }
 
-    return $topics;
+    return collected_contexts_for_date($runDate, 'trend');
 }
 
 function save_current_topic(string $runDate, array $topic): void
@@ -276,6 +269,84 @@ function save_current_topic(string $runDate, array $topic): void
         $topic['keywords'],
         $topic['source'],
     ]);
+}
+
+function save_collected_context(string $runDate, string $type, array $topic): void
+{
+    $title = clean_context_text($topic['title'] ?? '');
+    if ($title === '') {
+        return;
+    }
+
+    $rawText = clean_context_text($topic['raw_text'] ?? $title);
+    $keywords = clean_context_text($topic['keywords'] ?? '');
+    $source = clean_context_text($topic['source'] ?? $type);
+    $sourceUrl = $topic['source_url'] ?? null;
+    $normalizedTitle = normalize_context_key($title);
+
+    $stmt = db()->prepare(
+        'INSERT INTO collected_contexts
+         (run_date, context_type, source, title, normalized_title, keywords, raw_text, source_url, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+            title = VALUES(title),
+            keywords = VALUES(keywords),
+            raw_text = VALUES(raw_text),
+            source_url = VALUES(source_url),
+            updated_at = NOW()'
+    );
+    $stmt->execute([
+        $runDate,
+        $type,
+        $source,
+        mb_substr($title, 0, 255, 'UTF-8'),
+        mb_substr($normalizedTitle, 0, 255, 'UTF-8'),
+        $keywords,
+        $rawText,
+        $sourceUrl,
+    ]);
+}
+
+function collected_contexts_for_date(string $runDate, ?string $type = null): array
+{
+    if ($type) {
+        $stmt = db()->prepare(
+            'SELECT * FROM collected_contexts WHERE run_date = ? AND context_type = ? ORDER BY updated_at DESC, id DESC'
+        );
+        $stmt->execute([$runDate, $type]);
+    } else {
+        $stmt = db()->prepare(
+            'SELECT * FROM collected_contexts WHERE run_date = ? ORDER BY context_type, updated_at DESC, id DESC'
+        );
+        $stmt->execute([$runDate]);
+    }
+
+    return $stmt->fetchAll();
+}
+
+function collected_contexts_count_for_date(string $runDate, ?string $type = null): int
+{
+    if ($type) {
+        $stmt = db()->prepare('SELECT COUNT(*) FROM collected_contexts WHERE run_date = ? AND context_type = ?');
+        $stmt->execute([$runDate, $type]);
+    } else {
+        $stmt = db()->prepare('SELECT COUNT(*) FROM collected_contexts WHERE run_date = ?');
+        $stmt->execute([$runDate]);
+    }
+
+    return (int) $stmt->fetchColumn();
+}
+
+function clean_context_text(string $text): string
+{
+    $text = html_entity_decode(strip_tags($text), ENT_QUOTES, 'UTF-8');
+    return trim(preg_replace('/\s+/u', ' ', $text));
+}
+
+function normalize_context_key(string $text): string
+{
+    $text = normalize_score_text($text);
+    return trim((string) $text);
 }
 
 function fetch_current_news_topics(string $runDate): array
@@ -316,11 +387,13 @@ function fetch_current_news_topics(string $runDate): array
                 'title' => $item['title'],
                 'keywords' => implode(' ', $keywords),
                 'source' => 'rss:' . ($feed['name'] ?? 'news'),
+                'raw_text' => $text,
+                'source_url' => $item['link'] ?? null,
             ];
         }
     }
 
-    return $topics ?: derive_trend_topics_from_news($runDate, $maxItems);
+    return $topics;
 }
 
 function fetch_feed_body(array $feed, string $userAgent): ?string
@@ -367,12 +440,14 @@ function derive_trend_topics_from_news(string $runDate, int $maxItems): array
     arsort($counts);
     $topics = [];
     foreach (array_slice(array_keys($counts), 0, $maxItems) as $keyword) {
-        $topics[] = [
-            'title' => 'Tendencia: ' . $keyword,
-            'keywords' => $keyword,
-            'source' => 'trend:derived-news',
-        ];
-    }
+            $topics[] = [
+                'title' => 'Tendencia: ' . $keyword,
+                'keywords' => $keyword,
+                'source' => 'trend:derived-news',
+                'raw_text' => $keyword,
+                'source_url' => null,
+            ];
+        }
 
     return $topics;
 }
@@ -415,6 +490,8 @@ function fetch_current_trend_topics(string $runDate): array
                 'title' => $item['title'],
                 'keywords' => implode(' ', $keywords),
                 'source' => 'trend:' . ($feed['name'] ?? 'Google Trends'),
+                'raw_text' => $text,
+                'source_url' => $item['link'] ?? null,
             ];
         }
     }
@@ -443,6 +520,7 @@ function parse_rss_items(string $body): array
         $items[] = [
             'title' => $title,
             'description' => trim(strip_tags((string) $item->description)),
+            'link' => trim((string) $item->link),
         ];
     }
 

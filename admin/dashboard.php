@@ -19,6 +19,10 @@ render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de ope
             <span>Etapa 3</span>
             <strong>Coletar tendencias do dia</strong>
         </a>
+        <a class="option-card" href="/admin/contexts.php">
+            <span>Base higienizada</span>
+            <strong>Ver noticias e tendencias persistidas</strong>
+        </a>
         <a class="option-card" href="/admin/apply-score.php">
             <span>Etapa 4</span>
             <strong>Aplicar score de prioridade</strong>

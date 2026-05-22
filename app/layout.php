@@ -10,6 +10,7 @@ function nav_items(string $area): array
             ['key' => 'collect-events', 'label' => 'Coletar eventos', 'href' => '/admin/collect-events.php'],
             ['key' => 'collect-news', 'label' => 'Coletar noticias', 'href' => '/admin/collect-news.php'],
             ['key' => 'collect-trends', 'label' => 'Coletar tendencias', 'href' => '/admin/collect-trends.php'],
+            ['key' => 'contexts', 'label' => 'Base contexto', 'href' => '/admin/contexts.php'],
             ['key' => 'apply-score', 'label' => 'Aplicar score', 'href' => '/admin/apply-score.php'],
             ['key' => 'priority', 'label' => 'Prioridade', 'href' => '/admin/priority.php'],
             ['key' => 'run', 'label' => 'Execucao completa', 'href' => '/admin/run.php'],

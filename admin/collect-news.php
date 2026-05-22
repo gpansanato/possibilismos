@@ -25,6 +25,7 @@ render_page_start('Coletar noticias', 'collect-news', 'admin', 'Busca noticias p
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
         <p>Topicos/noticias registrados para hoje: <?= h((string) $topicsCount) ?></p>
+        <p>Noticias persistidas na base higienizada: <?= h((string) collected_contexts_count_for_date($today['date'], 'news')) ?></p>
     </section>
 
     <?php if ($topics): ?>

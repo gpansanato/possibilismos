@@ -29,6 +29,7 @@ render_page_start('Coletar tendencias', 'collect-trends', 'admin', 'Busca tenden
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
         <p>Tendencias registradas para hoje: <?= h((string) $topicsCount) ?></p>
+        <p>Tendencias persistidas na base higienizada: <?= h((string) collected_contexts_count_for_date($today['date'], 'trend')) ?></p>
         <?php if ($topics !== null): ?>
             <p><?= h((string) $derivedCount) ?> tendencias vieram do fallback derivado de noticias.</p>
         <?php endif; ?>

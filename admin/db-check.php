@@ -39,13 +39,16 @@ $checks = [
     ['Tabela events', table_exists('events')],
     ['Tabela daily_runs', table_exists('daily_runs')],
     ['Tabela current_topics', table_exists('current_topics')],
+    ['Tabela collected_contexts', table_exists('collected_contexts')],
     ['Tabela daily_rankings', table_exists('daily_rankings')],
     ['Tabela scoring_settings', table_exists('scoring_settings')],
     ['events.review_status', column_exists('events', 'review_status')],
     ['events.active', column_exists('events', 'active')],
     ['events.base_score', column_exists('events', 'base_score')],
     ['daily_rankings.context_summary', column_exists('daily_rankings', 'context_summary')],
+    ['collected_contexts.normalized_title', column_exists('collected_contexts', 'normalized_title')],
     ['daily_rankings uniq_daily_rankings_event', index_exists('daily_rankings', 'uniq_daily_rankings_event')],
+    ['collected_contexts uniq_collected_context', index_exists('collected_contexts', 'uniq_collected_context')],
     ['events idx_events_review_status', index_exists('events', 'idx_events_review_status')],
 ];
 
@@ -91,6 +94,7 @@ render_page_start('Diagnostico do banco', 'db-check', 'admin', 'Verifica se o ba
         <h1>SQL de referencia</h1>
         <p>Se algum item estiver faltando, aplique as migracoes nesta ordem pelo painel MySQL:</p>
         <pre><code>sql/migrations/2026_05_22_event_review_status.sql
-sql/migrations/2026_05_22_scoring_settings.sql</code></pre>
+sql/migrations/2026_05_22_scoring_settings.sql
+sql/migrations/2026_05_22_collected_contexts.sql</code></pre>
     </section>
 <?php render_page_end(); ?>
