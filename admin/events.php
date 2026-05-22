@@ -6,6 +6,16 @@ $status = $_GET['status'] ?? 'all';
 $month = $_GET['month'] ?? '';
 $day = $_GET['day'] ?? '';
 $search = trim($_GET['q'] ?? '');
+$sort = $_GET['sort'] ?? 'date_asc';
+$allowedSorts = [
+    'date_asc' => 'event_month ASC, event_day ASC, year ASC',
+    'date_desc' => 'event_month DESC, event_day DESC, year ASC',
+    'score_desc' => 'base_score DESC, event_month ASC, event_day ASC, year ASC',
+    'score_asc' => 'base_score ASC, event_month ASC, event_day ASC, year ASC',
+];
+if (!isset($allowedSorts[$sort])) {
+    $sort = 'date_asc';
+}
 
 $where = [];
 $params = [];
@@ -35,7 +45,7 @@ $sql = 'SELECT * FROM events';
 if ($where) {
     $sql .= ' WHERE ' . implode(' AND ', $where);
 }
-$sql .= ' ORDER BY event_month, event_day, FIELD(review_status, "pending", "approved", "rejected"), year';
+$sql .= ' ORDER BY ' . $allowedSorts[$sort] . ', FIELD(review_status, "pending", "approved", "rejected")';
 
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
@@ -50,6 +60,10 @@ foreach ($counts as $row) {
 }
 
 render_page_start('Eventos historicos', 'events', 'admin', 'Listagem completa da base historica usada pela selecao diaria.');
+$returnTo = '/admin/events.php';
+if ($_SERVER['QUERY_STRING'] ?? '') {
+    $returnTo .= '?' . $_SERVER['QUERY_STRING'];
+}
 ?>
     <section class="section-heading">
         <div>
@@ -75,36 +89,62 @@ render_page_start('Eventos historicos', 'events', 'admin', 'Listagem completa da
             </label>
             <label>Mes <input type="number" name="month" min="1" max="12" value="<?= h($month) ?>"></label>
             <label>Dia <input type="number" name="day" min="1" max="31" value="<?= h($day) ?>"></label>
+            <label>Ordenar
+                <select name="sort">
+                    <option value="date_asc" <?= $sort === 'date_asc' ? 'selected' : '' ?>>Data crescente</option>
+                    <option value="date_desc" <?= $sort === 'date_desc' ? 'selected' : '' ?>>Data decrescente</option>
+                    <option value="score_desc" <?= $sort === 'score_desc' ? 'selected' : '' ?>>Score maior</option>
+                    <option value="score_asc" <?= $sort === 'score_asc' ? 'selected' : '' ?>>Score menor</option>
+                </select>
+            </label>
             <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Titulo, descricao, categoria ou regiao"></label>
             <button type="submit">Filtrar</button>
             <a class="button button-secondary" href="/admin/events.php">Limpar</a>
         </form>
     </section>
 
-    <section class="list">
-        <?php foreach ($events as $event): ?>
-            <article class="event">
-                <div class="year"><?= h($event['year']) ?></div>
-                <div>
-                    <h2><?= h($event['title']) ?></h2>
-                    <p><?= h($event['description']) ?></p>
-                    <div class="meta">
-                        <span><?= h($event['event_day']) ?>/<?= h($event['event_month']) ?></span>
-                        <span><?= h($event['category']) ?></span>
-                        <span><?= h($event['region']) ?></span>
-                        <span>Score <?= h(number_format((float) $event['base_score'], 1)) ?></span>
-                        <span class="status-badge <?= h(event_review_status_class($event['review_status'])) ?>">
-                            <?= h(event_review_status_label($event['review_status'])) ?>
-                        </span>
-                    </div>
-                    <form class="actions" method="post" action="/admin/update-event-status.php">
-                        <input type="hidden" name="id" value="<?= h((string) $event['id']) ?>">
-                        <button name="review_status" value="approved" type="submit">Aprovar</button>
-                        <button name="review_status" value="pending" type="submit">Marcar nao avaliado</button>
-                        <button class="danger" name="review_status" value="rejected" type="submit">Reprovar</button>
-                    </form>
-                </div>
-            </article>
-        <?php endforeach; ?>
+    <section class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Ano</th>
+                    <th>Evento</th>
+                    <th>Categoria</th>
+                    <th>Score</th>
+                    <th>Estado</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($events as $event): ?>
+                    <tr>
+                        <td data-label="Data"><?= h(str_pad((string) $event['event_day'], 2, '0', STR_PAD_LEFT)) ?>/<?= h(str_pad((string) $event['event_month'], 2, '0', STR_PAD_LEFT)) ?></td>
+                        <td data-label="Ano"><?= h($event['year']) ?></td>
+                        <td data-label="Evento">
+                            <a class="table-title" href="/admin/event-detail.php?id=<?= h((string) $event['id']) ?>"><?= h($event['title']) ?></a>
+                            <small><?= h($event['region']) ?></small>
+                        </td>
+                        <td data-label="Categoria"><?= h($event['category']) ?></td>
+                        <td data-label="Score"><?= h(number_format((float) $event['base_score'], 1)) ?></td>
+                        <td data-label="Estado">
+                            <span class="status-badge <?= h(event_review_status_class($event['review_status'])) ?>">
+                                <?= h(event_review_status_label($event['review_status'])) ?>
+                            </span>
+                        </td>
+                        <td data-label="Acoes">
+                            <form class="row-actions" method="post" action="/admin/update-event-status.php">
+                                <input type="hidden" name="id" value="<?= h((string) $event['id']) ?>">
+                                <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
+                                <a class="button button-secondary" href="/admin/event-detail.php?id=<?= h((string) $event['id']) ?>">Detalhes</a>
+                                <button name="review_status" value="approved" type="submit">Aprovar</button>
+                                <button name="review_status" value="pending" type="submit">Pendente</button>
+                                <button class="danger" name="review_status" value="rejected" type="submit">Reprovar</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
     </section>
 <?php render_page_end(); ?>

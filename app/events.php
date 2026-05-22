@@ -69,6 +69,25 @@ function rankings_for_date(string $runDate): array
     return $stmt->fetchAll();
 }
 
+function event_by_id(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM events WHERE id = ? LIMIT 1');
+    $stmt->execute([$id]);
+    $event = $stmt->fetch();
+
+    return $event ?: null;
+}
+
+function event_rankings(int $eventId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM daily_rankings WHERE event_id = ? ORDER BY run_date DESC, score DESC, id DESC'
+    );
+    $stmt->execute([$eventId]);
+
+    return $stmt->fetchAll();
+}
+
 function current_topics_count_for_date(string $runDate): int
 {
     $stmt = db()->prepare('SELECT COUNT(*) FROM current_topics WHERE run_date = ?');
