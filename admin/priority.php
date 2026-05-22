@@ -15,14 +15,23 @@ $settings = scoring_settings();
 $definitions = scoring_setting_definitions();
 $rankings = rankings_for_date($runDate);
 $topics = topics_for_date($runDate);
-$newsCount = current_topics_count_for_date_and_source($runDate, 'rss');
-$trendsCount = current_topics_count_for_date_and_source($runDate, 'trend');
+$newsCount = collected_contexts_count_for_date($runDate, 'news');
+$trendsCount = collected_contexts_count_for_date($runDate, 'trend');
 $currentYear = (int) substr($runDate, 0, 4);
 
-render_page_start('Prioridade dos fatos', 'priority', 'admin', 'Lista os fatos relevantes obtidos e detalha como o score de prioridade e calculado.');
+render_page_start('Priorizacoes de eventos', 'priority', 'admin', 'Lista os eventos historicos priorizados e explica os motivos usados no calculo.');
 ?>
     <section class="panel">
-        <h1>Parametros do score</h1>
+        <h1>Criterios de priorizacao</h1>
+        <div class="feature-grid feature-grid--three">
+            <article class="feature-card"><h3>Relevancia historica</h3><p>Parte do score base do evento ja curado.</p></article>
+            <article class="feature-card"><h3>Contexto do dia</h3><p>Relaciona o evento com todas as noticias e tendencias higienizadas da data.</p></article>
+            <article class="feature-card"><h3>Marco temporal</h3><p>Aplica bonus quando o aniversario historico e editorialmente relevante.</p></article>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h1>Ajustes finos</h1>
         <?php if ($saved): ?><p>Parametros atualizados.</p><?php endif; ?>
         <form class="settings-grid" method="post">
             <?php foreach ($definitions as $key => $definition): ?>
@@ -39,11 +48,11 @@ render_page_start('Prioridade dos fatos', 'priority', 'admin', 'Lista os fatos r
         <div>
             <p class="eyebrow">
                 <?= h($runDate) ?> |
-                <?= count($rankings) ?> fatos ranqueados |
+                <?= count($rankings) ?> fatos priorizados |
                 <?= h((string) $newsCount) ?> noticias |
                 <?= h((string) $trendsCount) ?> tendencias
             </p>
-            <h2>Fatos relevantes obtidos</h2>
+            <h2>Eventos historicos priorizados</h2>
         </div>
         <form class="inline-filter" method="get">
             <label>Data <input type="date" name="date" value="<?= h($runDate) ?>"></label>
@@ -53,7 +62,7 @@ render_page_start('Prioridade dos fatos', 'priority', 'admin', 'Lista os fatos r
 
     <?php if (!$rankings): ?>
         <section class="empty">
-            <p>Nenhum score aplicado para esta data. Use a etapa Aplicar score.</p>
+            <p>Nenhuma priorizacao aplicada para esta data. Use a etapa Priorizar eventos.</p>
         </section>
     <?php endif; ?>
 
@@ -83,7 +92,7 @@ render_page_start('Prioridade dos fatos', 'priority', 'admin', 'Lista os fatos r
                     <h2><?= h($item['title']) ?></h2>
                     <p><?= h($item['description']) ?></p>
                     <div class="meta">
-                        <span>Score salvo <?= h(number_format((float) $item['score'], 1)) ?></span>
+                        <span>Prioridade salva <?= h(number_format((float) $item['score'], 1)) ?></span>
                         <span>Publicacao <?= h($item['status']) ?></span>
                         <span>Evento <?= h(event_review_status_label($item['review_status'])) ?></span>
                     </div>

@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = $e->getMessage();
     }
 }
-render_page_start('Execucao completa', 'run', 'admin', 'Executa em sequencia: coleta de eventos, coleta de noticias e aplicacao do score.');
+render_page_start('Execucao completa', 'run', 'admin', 'Executa em sequencia: coleta de eventos, coleta de noticias e priorizacao.');
 ?>
     <section class="panel">
         <h1>Executar processo completo</h1>

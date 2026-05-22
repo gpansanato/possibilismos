@@ -2,10 +2,8 @@
 
 function run_daily_ranking(?string $runDate = null, ?int $limit = null): array
 {
-    $config = require __DIR__ . '/config.php';
     $today = today_key();
     $runDate = $runDate ?: $today['date'];
-    $limit = $limit ?: (int) $config['cron']['default_limit'];
 
     import_historical_events_for_today();
     collect_daily_context_topics($runDate);
@@ -37,10 +35,8 @@ function collect_daily_trend_topics(?string $runDate = null): array
 
 function apply_daily_priority_score(?string $runDate = null, ?int $limit = null): array
 {
-    $config = require __DIR__ . '/config.php';
-    $today = today_key();
-    $runDate = $runDate ?: $today['date'];
-    $limit = $limit ?: (int) $config['cron']['default_limit'];
+    $runDate = $runDate ?: today_key()['date'];
+    $dateParts = date_parts_from_run_date($runDate);
 
     $pdo = db();
     $pdo->beginTransaction();
@@ -53,31 +49,36 @@ function apply_daily_priority_score(?string $runDate = null, ?int $limit = null)
         );
         $stmt->execute([$runDate]);
 
+        rebuild_current_topics_from_collected_contexts($runDate);
         $topics = topics_for_date($runDate);
         if (!$topics) {
             $topics = collect_daily_context_topics($runDate);
         }
 
-        $events = events_for_day($today['month'], $today['day']);
-        $ranked = rank_events($events, $topics, $today['year']);
+        $events = historical_events_for_day($dateParts['month'], $dateParts['day']);
+        $ranked = rank_events($events, $topics, $dateParts['year']);
+        $existingStatuses = ranking_statuses_for_date($runDate);
+        $pdo->prepare('DELETE FROM daily_rankings WHERE run_date = ?')->execute([$runDate]);
 
         $insert = $pdo->prepare(
             'INSERT INTO daily_rankings
              (run_date, event_id, score, reasons, context_summary, status, created_at)
-             VALUES (?, ?, ?, ?, ?, "suggested", NOW())
+             VALUES (?, ?, ?, ?, ?, ?, NOW())
              ON DUPLICATE KEY UPDATE
                 score = VALUES(score),
                 reasons = VALUES(reasons),
-                context_summary = VALUES(context_summary)'
+                context_summary = VALUES(context_summary),
+                status = VALUES(status)'
         );
 
-        foreach (array_slice($ranked, 0, $limit) as $item) {
+        foreach ($ranked as $item) {
             $insert->execute([
                 $runDate,
                 $item['event']['id'],
                 $item['score'],
                 implode('; ', $item['reasons']),
                 $item['context_summary'],
+                $existingStatuses[(int) $item['event']['id']] ?? 'suggested',
             ]);
         }
 
@@ -85,7 +86,7 @@ function apply_daily_priority_score(?string $runDate = null, ?int $limit = null)
             ->execute([$runDate]);
 
         $pdo->commit();
-        return array_slice($ranked, 0, $limit);
+        return $limit ? array_slice($ranked, 0, $limit) : $ranked;
     } catch (Throwable $e) {
         $pdo->rollBack();
         $stmt = $pdo->prepare('UPDATE daily_runs SET status = "failed", error_message = ?, finished_at = NOW() WHERE run_date = ?');
@@ -108,7 +109,7 @@ function rank_events(array $events, array $topics, int $currentYear): array
             ($categoryCounts[$category] ?? 0) * (float) $settings['diversity_penalty']
         );
         $components['diversity'] = -$diversityPenalty;
-        $score = array_sum($components);
+        $score = array_sum(array_filter($components, 'is_numeric'));
         $reasons = build_score_reasons($event, $components, $currentYear);
         $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
 
@@ -148,6 +149,7 @@ function score_event_components(array $event, array $topics, int $currentYear, ?
     $components['news'] = $match['news_score'];
     $components['trends'] = $match['trend_score'];
     $components['category'] = category_context_score((string) $event['category'], $topics, $settings);
+    $components['_details'] = $match;
 
     return $components;
 }
@@ -184,8 +186,10 @@ function event_context_match_score(array $event, array $topics, array $settings)
     );
     $matchedNewsTopics = 0;
     $matchedNewsKeywords = [];
+    $matchedNewsTitles = [];
     $matchedTrendTopics = 0;
     $matchedTrendKeywords = [];
+    $matchedTrendTitles = [];
 
     foreach ($topics as $topic) {
         $keywords = topic_keywords($topic);
@@ -209,8 +213,10 @@ function event_context_match_score(array $event, array $topics, array $settings)
         if ($topicMatches > 0) {
             if (source_is_trend($topic['source'] ?? '')) {
                 $matchedTrendTopics++;
+                $matchedTrendTitles[] = (string) ($topic['title'] ?? '');
             } else {
                 $matchedNewsTopics++;
+                $matchedNewsTitles[] = (string) ($topic['title'] ?? '');
             }
         }
     }
@@ -233,6 +239,8 @@ function event_context_match_score(array $event, array $topics, array $settings)
         'trend_topics' => $matchedTrendTopics,
         'news_keywords' => array_keys($matchedNewsKeywords),
         'trend_keywords' => array_keys($matchedTrendKeywords),
+        'news_titles' => array_values(array_filter(array_unique($matchedNewsTitles))),
+        'trend_titles' => array_values(array_filter(array_unique($matchedTrendTitles))),
     ];
 }
 
@@ -281,14 +289,19 @@ function normalize_score_text(string $text): string
 function build_score_reasons(array $event, array $components, int $currentYear): array
 {
     $reasons = [];
-    $reasons[] = 'relevancia historica ' . number_format((float) $event['base_score'], 1);
+    $details = is_array($components['_details'] ?? null) ? $components['_details'] : [];
+    $reasons[] = 'relevancia historica base ' . number_format((float) $event['base_score'], 1) . ' com peso aplicado de ' . number_format((float) $components['historical'], 1);
 
     if ($components['news'] > 0) {
-        $reasons[] = 'conexao com noticias do dia +' . number_format($components['news'], 1);
+        $keywords = implode(', ', array_slice($details['news_keywords'] ?? [], 0, 6));
+        $titles = implode(' | ', array_slice($details['news_titles'] ?? [], 0, 2));
+        $reasons[] = 'conexao com ' . (int) ($details['news_topics'] ?? 0) . ' noticias por termos: ' . ($keywords ?: 'nao informado') . ($titles ? ' em "' . $titles . '"' : '') . ' +' . number_format($components['news'], 1);
     }
 
     if ($components['trends'] > 0) {
-        $reasons[] = 'conexao com tendencias do dia +' . number_format($components['trends'], 1);
+        $keywords = implode(', ', array_slice($details['trend_keywords'] ?? [], 0, 6));
+        $titles = implode(' | ', array_slice($details['trend_titles'] ?? [], 0, 2));
+        $reasons[] = 'conexao com ' . (int) ($details['trend_topics'] ?? 0) . ' tendencias por termos: ' . ($keywords ?: 'nao informado') . ($titles ? ' em "' . $titles . '"' : '') . ' +' . number_format($components['trends'], 1);
     }
 
     if ($components['anniversary'] > 0) {
@@ -309,7 +322,7 @@ function build_score_reasons(array $event, array $components, int $currentYear):
 
 function build_context_summary(array $event, array $reasons): string
 {
-    return 'Este fato foi priorizado por ' . implode(', ', $reasons) . '.';
+    return 'Priorizacao calculada por: ' . implode('; ', $reasons) . '.';
 }
 
 function scoring_setting_definitions(): array
@@ -369,4 +382,28 @@ function update_scoring_settings(array $input): void
         $value = (float) str_replace(',', '.', (string) $input[$key]);
         $stmt->execute([$key, $value]);
     }
+}
+
+function date_parts_from_run_date(string $runDate): array
+{
+    $date = DateTimeImmutable::createFromFormat('Y-m-d', $runDate) ?: new DateTimeImmutable('now');
+
+    return [
+        'year' => (int) $date->format('Y'),
+        'month' => (int) $date->format('m'),
+        'day' => (int) $date->format('d'),
+    ];
+}
+
+function ranking_statuses_for_date(string $runDate): array
+{
+    $stmt = db()->prepare('SELECT event_id, status FROM daily_rankings WHERE run_date = ?');
+    $stmt->execute([$runDate]);
+
+    $statuses = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $statuses[(int) $row['event_id']] = (string) $row['status'];
+    }
+
+    return $statuses;
 }

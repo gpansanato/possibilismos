@@ -15,11 +15,11 @@ render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de ope
         </a>
         <a class="option-card" href="/admin/apply-score.php">
             <span>Etapa 4</span>
-            <strong>Aplicar score de prioridade</strong>
+            <strong>Priorizar eventos historicos</strong>
         </a>
         <a class="option-card" href="/admin/priority.php">
             <span>Analise</span>
-            <strong>Ver fatos e parametros do score</strong>
+            <strong>Ver priorizacoes e criterios</strong>
         </a>
         <a class="option-card" href="/admin/collections.php">
             <span>Automacao</span>

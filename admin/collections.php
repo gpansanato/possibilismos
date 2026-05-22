@@ -65,14 +65,14 @@ $collectionRows = [
     ],
     [
         'date' => $today['date'],
-        'name' => 'Topicos do score',
+        'name' => 'Topicos de priorizacao',
         'status' => $topicsCount > 0 ? 'Disponivel' : 'Pendente',
         'count' => $topicsCount,
         'detail' => 'Registros operacionais em current_topics',
     ],
     [
         'date' => $today['date'],
-        'name' => 'Score aplicado',
+        'name' => 'Priorizacao aplicada',
         'status' => $rankingCount > 0 ? 'Concluida' : 'Pendente',
         'count' => $rankingCount,
         'detail' => 'Registros salvos em daily_rankings',
@@ -85,7 +85,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individ
         <form class="option-card is-featured" method="post">
             <span>Execucao completa</span>
             <strong>Rodar processo diario</strong>
-            <p>Executa eventos historicos, noticias, tendencias e aplicacao do score em sequencia.</p>
+            <p>Executa eventos historicos, noticias, tendencias e priorizacao em sequencia.</p>
             <button name="action" value="full_run" type="submit">Executar tudo</button>
         </form>
 
@@ -113,7 +113,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individ
         <form class="option-card" method="post">
             <span>Contexto completo</span>
             <strong>Noticias + tendencias</strong>
-            <p>Atualiza todo o contexto usado pelo score sem recalcular o ranking.</p>
+            <p>Atualiza todo o contexto usado na priorizacao sem recalcular os eventos.</p>
             <button name="action" value="context" type="submit">Coletar contexto</button>
         </form>
     </section>

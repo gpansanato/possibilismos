@@ -82,9 +82,9 @@ render_page_start('Diagnostico do banco', 'db-check', 'admin', 'Verifica se o ba
     </section>
 
     <section class="panel">
-        <h1>Parametros de score</h1>
+        <h1>Parametros de priorizacao</h1>
         <?php if (!$missingSettings): ?>
-            <p>Todos os parametros configuraveis do score estao presentes.</p>
+            <p>Todos os parametros configuraveis da priorizacao estao presentes.</p>
         <?php else: ?>
             <p>Parametros ausentes:</p>
             <ul>

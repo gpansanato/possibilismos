@@ -5,34 +5,38 @@ require_admin();
 $result = null;
 $error = null;
 $today = today_key();
-$approvedEvents = events_count_for_day($today['month'], $today['day']);
-$topicsCount = current_topics_count_for_date($today['date']);
-$newsCount = current_topics_count_for_date_and_source($today['date'], 'rss');
-$trendsCount = current_topics_count_for_date_and_source($today['date'], 'trend');
+$runDate = $_POST['date'] ?? $_GET['date'] ?? $today['date'];
+$dateParts = date_parts_from_run_date($runDate);
+$historicalEvents = historical_events_count_for_day($dateParts['month'], $dateParts['day']);
+$topicsCount = current_topics_count_for_date($runDate);
+$newsCount = collected_contexts_count_for_date($runDate, 'news');
+$trendsCount = collected_contexts_count_for_date($runDate, 'trend');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $result = apply_daily_priority_score($today['date']);
-        $approvedEvents = events_count_for_day($today['month'], $today['day']);
-        $topicsCount = current_topics_count_for_date($today['date']);
-        $newsCount = current_topics_count_for_date_and_source($today['date'], 'rss');
-        $trendsCount = current_topics_count_for_date_and_source($today['date'], 'trend');
+        $result = apply_daily_priority_score($runDate);
+        $historicalEvents = historical_events_count_for_day($dateParts['month'], $dateParts['day']);
+        $topicsCount = current_topics_count_for_date($runDate);
+        $newsCount = collected_contexts_count_for_date($runDate, 'news');
+        $trendsCount = collected_contexts_count_for_date($runDate, 'trend');
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
 }
 
-render_page_start('Aplicar score de prioridade', 'apply-score', 'admin', 'Calcula prioridade dos eventos aprovados usando noticias, relevancia historica e criterios editoriais.');
+render_page_start('Priorizacao de eventos historicos', 'apply-score', 'admin', 'Relaciona todos os eventos historicos aprovados do dia avaliado com todas as noticias e tendencias da base de contexto.');
 ?>
     <section class="panel">
-        <h1>Score de avaliacao de prioridade</h1>
+        <h1>Executar priorizacao</h1>
         <form method="post">
-            <button type="submit">Aplicar score agora</button>
+            <label>Data avaliada <input type="date" name="date" value="<?= h($runDate) ?>"></label>
+            <button type="submit">Priorizar eventos agora</button>
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
-        <p>Eventos aprovados para hoje: <?= h((string) $approvedEvents) ?></p>
-        <p>Contextos disponiveis: <?= h((string) $topicsCount) ?> no total, <?= h((string) $newsCount) ?> noticias, <?= h((string) $trendsCount) ?> tendencias.</p>
-        <?php if ($result !== null): ?><p><?= count($result) ?> eventos ranqueados.</p><?php endif; ?>
+        <p>Eventos historicos no dia avaliado: <?= h((string) $historicalEvents) ?></p>
+        <p>Contextos disponiveis na base higienizada: <?= h((string) ($newsCount + $trendsCount)) ?> no total, <?= h((string) $newsCount) ?> noticias, <?= h((string) $trendsCount) ?> tendencias.</p>
+        <p>Topicos operacionais reconstruidos para o calculo: <?= h((string) $topicsCount) ?></p>
+        <?php if ($result !== null): ?><p><?= count($result) ?> eventos priorizados e salvos.</p><?php endif; ?>
     </section>
 
     <?php if ($result): ?>
@@ -43,7 +47,7 @@ render_page_start('Aplicar score de prioridade', 'apply-score', 'admin', 'Calcul
                     <div>
                         <h2><?= h($item['event']['title']) ?></h2>
                         <p><?= h($item['context_summary']) ?></p>
-                        <p class="meta">Score <?= h(number_format((float) $item['score'], 1)) ?></p>
+                        <p class="meta">Prioridade <?= h(number_format((float) $item['score'], 1)) ?></p>
                     </div>
                 </article>
             <?php endforeach; ?>

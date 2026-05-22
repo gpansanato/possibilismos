@@ -75,7 +75,7 @@ No MVP, as fontes padrao usam Google News Brasil, Mundo e Tecnologia.
 
 Se a coleta RSS falhar, o sistema usa temas seed para manter o ranking funcionando.
 
-O score de priorizacao combina:
+O processo de priorizacao de eventos historicos combina:
 
 ```text
 relevancia historica       peso principal, a partir de base_score
@@ -91,10 +91,10 @@ No admin, o processo pode ser operado em etapas:
 ```text
 /admin/collections.php     Tela unica de coletas operacionais
 /admin/contexts.php        Lista noticias e tendencias persistidas
-/admin/apply-score.php     Aplica o score de prioridade
-/admin/priority.php        Lista fatos ranqueados e parametros do score
+/admin/apply-score.php     Executa a priorizacao de eventos historicos
+/admin/priority.php        Lista priorizacoes, criterios e motivos
 ```
 
 A coleta de tendencias usa conectores para GDELT Project, Wikimedia Pageviews API, Agencia Brasil RSS e Hacker News API. O conector Media Cloud esta preparado, mas fica desativado por padrao ate informar endpoint e chave em `app/config.local.php`. Se as fontes externas falharem ou retornarem vazio, o MVP deriva tendencias a partir dos termos mais frequentes nas noticias coletadas do dia, salvando esses itens como `trend:derived-news`.
 
-Noticias e tendencias coletadas tambem sao persistidas em `collected_contexts`, com chave unica por data, tipo, fonte e titulo normalizado. A tabela `current_topics` fica como area operacional para o score; `collected_contexts` e a base higienizada/auditavel.
+Noticias e tendencias coletadas tambem sao persistidas em `collected_contexts`, com chave unica por data, tipo, fonte e titulo normalizado. A cada priorizacao, a tabela `current_topics` e reconstruida a partir da base higienizada para garantir que todos os contextos da data avaliada sejam considerados.
