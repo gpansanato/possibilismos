@@ -238,6 +238,17 @@ a {
     font-size: 13px;
 }
 
+.check-list {
+    display: grid;
+    gap: 10px;
+}
+
+.check-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .status-badge {
     display: inline-flex;
     align-items: center;
