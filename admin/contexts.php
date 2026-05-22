@@ -5,9 +5,16 @@ require_admin();
 $today = today_key();
 $runDate = $_GET['date'] ?? $today['date'];
 $type = $_GET['type'] ?? '';
-$items = collected_contexts_for_date($runDate, in_array($type, ['news', 'trend'], true) ? $type : null);
+$source = trim($_GET['source'] ?? '');
+$search = trim($_GET['q'] ?? '');
+$sort = $_GET['sort'] ?? 'updated_desc';
+$selectedType = in_array($type, ['news', 'trend'], true) ? $type : null;
+$items = collected_contexts_search($runDate, $selectedType, $source, $search, $sort);
 
-render_page_start('Base higienizada de contexto', 'contexts', 'admin', 'Noticias e tendencias persistidas, normalizadas e deduplicadas por coleta.');
+$newsCount = collected_contexts_count_for_date($runDate, 'news');
+$trendCount = collected_contexts_count_for_date($runDate, 'trend');
+
+render_page_start('Noticias e tendencias', 'contexts', 'admin', 'Listagem compacta dos itens coletados, higienizados e usados como contexto do score.');
 ?>
     <section class="panel">
         <form class="filter-form" method="get">
@@ -19,14 +26,31 @@ render_page_start('Base higienizada de contexto', 'contexts', 'admin', 'Noticias
                     <option value="trend" <?= $type === 'trend' ? 'selected' : '' ?>>Tendencias</option>
                 </select>
             </label>
+            <label>Fonte <input name="source" value="<?= h($source) ?>" placeholder="rss, gdelt, hacker..."></label>
+            <label>Ordenar
+                <select name="sort">
+                    <option value="updated_desc" <?= $sort === 'updated_desc' ? 'selected' : '' ?>>Atualizacao recente</option>
+                    <option value="updated_asc" <?= $sort === 'updated_asc' ? 'selected' : '' ?>>Atualizacao antiga</option>
+                    <option value="date_desc" <?= $sort === 'date_desc' ? 'selected' : '' ?>>Data decrescente</option>
+                    <option value="date_asc" <?= $sort === 'date_asc' ? 'selected' : '' ?>>Data crescente</option>
+                    <option value="type" <?= $sort === 'type' ? 'selected' : '' ?>>Tipo</option>
+                    <option value="source" <?= $sort === 'source' ? 'selected' : '' ?>>Fonte</option>
+                </select>
+            </label>
+            <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Titulo, palavra-chave ou texto"></label>
             <button type="submit">Filtrar</button>
+            <a class="button button-secondary" href="/admin/contexts.php">Limpar</a>
         </form>
     </section>
 
     <section class="section-heading">
         <div>
-            <p class="eyebrow"><?= count($items) ?> itens persistidos</p>
-            <h2>Itens coletados</h2>
+            <p class="eyebrow">
+                <?= count($items) ?> itens na lista |
+                <?= h((string) $newsCount) ?> noticias |
+                <?= h((string) $trendCount) ?> tendencias
+            </p>
+            <h2>Coletas de contexto</h2>
         </div>
         <a class="button" href="/admin/collections.php">Executar coletas</a>
     </section>
@@ -37,22 +61,45 @@ render_page_start('Base higienizada de contexto', 'contexts', 'admin', 'Noticias
         </section>
     <?php endif; ?>
 
-    <section class="list">
-        <?php foreach ($items as $item): ?>
-            <article class="event">
-                <div class="year"><?= h($item['context_type']) ?></div>
-                <div>
-                    <h2><?= h($item['title']) ?></h2>
-                    <div class="meta">
-                        <span><?= h($item['source']) ?></span>
-                        <span><?= h($item['updated_at']) ?></span>
-                    </div>
-                    <p><?= h($item['keywords']) ?></p>
-                    <?php if ($item['source_url']): ?>
-                        <a href="<?= h($item['source_url']) ?>" target="_blank" rel="noopener">Fonte</a>
-                    <?php endif; ?>
-                </div>
-            </article>
-        <?php endforeach; ?>
+    <section class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Tipo</th>
+                    <th>Titulo</th>
+                    <th>Fonte</th>
+                    <th>Palavras-chave</th>
+                    <th>Atualizado</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($items as $item): ?>
+                    <tr>
+                        <td data-label="Data"><?= h($item['run_date']) ?></td>
+                        <td data-label="Tipo">
+                            <span class="status-badge <?= $item['context_type'] === 'news' ? 'is-approved' : 'is-pending' ?>">
+                                <?= h($item['context_type'] === 'news' ? 'Noticia' : 'Tendencia') ?>
+                            </span>
+                        </td>
+                        <td data-label="Titulo">
+                            <a class="table-title" href="/admin/context-detail.php?id=<?= h((string) $item['id']) ?>"><?= h($item['title']) ?></a>
+                        </td>
+                        <td data-label="Fonte"><?= h($item['source']) ?></td>
+                        <td data-label="Palavras-chave"><?= h($item['keywords']) ?></td>
+                        <td data-label="Atualizado"><?= h($item['updated_at']) ?></td>
+                        <td data-label="Acoes">
+                            <div class="row-actions">
+                                <a class="button button-secondary" href="/admin/context-detail.php?id=<?= h((string) $item['id']) ?>">Detalhes</a>
+                                <?php if ($item['source_url']): ?>
+                                    <a class="button button-secondary" href="<?= h($item['source_url']) ?>" target="_blank" rel="noopener">Fonte</a>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
     </section>
 <?php render_page_end(); ?>

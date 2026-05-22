@@ -359,6 +359,65 @@ function collected_contexts_for_date(string $runDate, ?string $type = null): arr
     return $stmt->fetchAll();
 }
 
+function collected_context_by_id(int $id): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM collected_contexts WHERE id = ? LIMIT 1');
+    $stmt->execute([$id]);
+    $context = $stmt->fetch();
+
+    return $context ?: null;
+}
+
+function collected_contexts_search(string $runDate, ?string $type, string $source, string $search, string $sort): array
+{
+    $allowedSorts = [
+        'updated_desc' => 'updated_at DESC, id DESC',
+        'updated_asc' => 'updated_at ASC, id ASC',
+        'date_desc' => 'run_date DESC, updated_at DESC, id DESC',
+        'date_asc' => 'run_date ASC, updated_at ASC, id ASC',
+        'type' => 'context_type ASC, source ASC, title ASC',
+        'source' => 'source ASC, context_type ASC, title ASC',
+    ];
+    if (!isset($allowedSorts[$sort])) {
+        $sort = 'updated_desc';
+    }
+
+    $where = [];
+    $params = [];
+
+    if ($runDate !== '') {
+        $where[] = 'run_date = ?';
+        $params[] = $runDate;
+    }
+
+    if ($type !== null) {
+        $where[] = 'context_type = ?';
+        $params[] = $type;
+    }
+
+    if ($source !== '') {
+        $where[] = 'source LIKE ?';
+        $params[] = '%' . $source . '%';
+    }
+
+    if ($search !== '') {
+        $where[] = '(title LIKE ? OR keywords LIKE ? OR raw_text LIKE ? OR source LIKE ?)';
+        $term = '%' . $search . '%';
+        array_push($params, $term, $term, $term, $term);
+    }
+
+    $sql = 'SELECT * FROM collected_contexts';
+    if ($where) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+    $sql .= ' ORDER BY ' . $allowedSorts[$sort];
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+
+    return $stmt->fetchAll();
+}
+
 function collected_contexts_count_for_date(string $runDate, ?string $type = null): int
 {
     if ($type) {
