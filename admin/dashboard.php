@@ -21,9 +21,9 @@ render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de ope
             <span>Analise</span>
             <strong>Ver fatos e parametros do score</strong>
         </a>
-        <a class="option-card" href="/admin/run.php">
+        <a class="option-card" href="/admin/collections.php">
             <span>Automacao</span>
-            <strong>Executar processo completo</strong>
+            <strong>Executar processo completo em Coletas</strong>
         </a>
         <a class="option-card" href="/admin/events.php">
             <span>Base historica</span>

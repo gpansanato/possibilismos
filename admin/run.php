@@ -2,6 +2,10 @@
 require_once __DIR__ . '/../app/bootstrap.php';
 require_admin();
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    redirect('/admin/collections.php');
+}
+
 $result = null;
 $error = null;
 $today = today_key();

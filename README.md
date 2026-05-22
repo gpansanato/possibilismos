@@ -21,7 +21,7 @@ sql/       Schema inicial
 5. Importe `sql/seed.sql` se quiser dados de teste para 22 de maio.
 6. Acesse `/admin/create-user.php` uma vez para criar o primeiro usuario.
 7. Cadastre eventos em `/admin/events.php`.
-8. Rode `/admin/run.php` ou configure o CronJob para chamar `cron/daily.php`.
+8. Rode a execucao completa em `/admin/collections.php` ou configure o CronJob para chamar `cron/daily.php`.
 
 ## Migracoes
 
@@ -93,7 +93,6 @@ No admin, o processo pode ser operado em etapas:
 /admin/contexts.php        Lista noticias e tendencias persistidas
 /admin/apply-score.php     Aplica o score de prioridade
 /admin/priority.php        Lista fatos ranqueados e parametros do score
-/admin/run.php             Executa o processo completo
 ```
 
 A coleta de tendencias usa conectores para GDELT Project, Wikimedia Pageviews API, Agencia Brasil RSS e Hacker News API. O conector Media Cloud esta preparado, mas fica desativado por padrao ate informar endpoint e chave em `app/config.local.php`. Se as fontes externas falharem ou retornarem vazio, o MVP deriva tendencias a partir dos termos mais frequentes nas noticias coletadas do dia, salvando esses itens como `trend:derived-news`.

@@ -10,7 +10,6 @@ function nav_items(string $area): array
             ['key' => 'contexts', 'label' => 'Base contexto', 'href' => '/admin/contexts.php'],
             ['key' => 'apply-score', 'label' => 'Aplicar score', 'href' => '/admin/apply-score.php'],
             ['key' => 'priority', 'label' => 'Prioridade', 'href' => '/admin/priority.php'],
-            ['key' => 'run', 'label' => 'Execucao completa', 'href' => '/admin/run.php'],
             ['key' => 'db-check', 'label' => 'Banco', 'href' => '/admin/db-check.php'],
             ['key' => 'site', 'label' => 'Site publico', 'href' => '/'],
             ['key' => 'logout', 'label' => 'Sair', 'href' => '/admin/logout.php'],
