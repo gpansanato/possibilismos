@@ -72,8 +72,13 @@ function fetch_wikimedia_on_this_day(string $language, string $type, int $month,
     return $data[$type] ?? [];
 }
 
-function http_get_json(string $url, string $userAgent): ?string
+function http_get_json(string $url, string $userAgent, array $headers = []): ?string
 {
+    $requestHeaders = array_merge([
+        'Accept: application/json, application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Api-User-Agent: ' . $userAgent,
+    ], $headers);
+
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -81,10 +86,7 @@ function http_get_json(string $url, string $userAgent): ?string
             CURLOPT_TIMEOUT => 20,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_USERAGENT => $userAgent,
-            CURLOPT_HTTPHEADER => [
-                'Accept: application/json, application/rss+xml, application/xml;q=0.9, */*;q=0.8',
-                'Api-User-Agent: ' . $userAgent,
-            ],
+            CURLOPT_HTTPHEADER => $requestHeaders,
         ]);
 
         $body = curl_exec($ch);
@@ -98,11 +100,7 @@ function http_get_json(string $url, string $userAgent): ?string
         'http' => [
             'method' => 'GET',
             'timeout' => 20,
-            'header' => implode("\r\n", [
-                'Accept: application/json, application/rss+xml, application/xml;q=0.9, */*;q=0.8',
-                'User-Agent: ' . $userAgent,
-                'Api-User-Agent: ' . $userAgent,
-            ]),
+            'header' => implode("\r\n", array_merge(['User-Agent: ' . $userAgent], $requestHeaders)),
         ],
     ]);
 
@@ -215,10 +213,13 @@ function infer_event_region(array $event, string $language): string
 function current_topics_for_today(?string $runDate = null): array
 {
     $runDate = $runDate ?: today_key()['date'];
-    $topics = array_merge(
-        fetch_current_news_topics($runDate),
-        fetch_current_trend_topics($runDate)
-    );
+    $newsTopics = fetch_current_news_topics($runDate);
+    $trendTopics = fetch_current_trend_topics($runDate);
+    if (!$trendTopics) {
+        $trendTopics = derive_trend_topics_from_news($runDate, 20);
+    }
+
+    $topics = array_merge($newsTopics, $trendTopics);
 
     if (!$topics) {
         $topics = fallback_current_topics();
@@ -248,6 +249,9 @@ function collect_trend_topics_for_date(string $runDate): array
 {
     db()->prepare('DELETE FROM current_topics WHERE run_date = ? AND source LIKE "trend:%"')->execute([$runDate]);
     $topics = fetch_current_trend_topics($runDate);
+    if (!$topics) {
+        $topics = derive_trend_topics_from_news($runDate, 20);
+    }
 
     foreach ($topics as $topic) {
         save_collected_context($runDate, 'trend', $topic);
@@ -495,13 +499,14 @@ function fetch_current_trend_topics(string $runDate): array
     $topics = [];
     $maxItems = (int) ($settings['max_items'] ?? 20);
     $feeds = $settings['feeds'] ?? [];
+    $userAgent = $config['sources']['wikimedia']['user_agent'] ?? 'PossibilismosMVP/0.1';
 
     foreach ($feeds as $feed) {
         if (count($topics) >= $maxItems) {
             break;
         }
 
-        $body = http_get_json($feed['url'], $config['sources']['wikimedia']['user_agent'] ?? 'PossibilismosMVP/0.1');
+        $body = fetch_feed_body($feed, $userAgent);
         if (!$body) {
             continue;
         }
@@ -520,11 +525,268 @@ function fetch_current_trend_topics(string $runDate): array
             $topics[] = [
                 'title' => $item['title'],
                 'keywords' => implode(' ', $keywords),
-                'source' => 'trend:' . ($feed['name'] ?? 'Google Trends'),
+                'source' => 'trend:' . ($feed['name'] ?? 'rss-feed'),
                 'raw_text' => $text,
                 'source_url' => $item['link'] ?? null,
             ];
         }
+    }
+
+    $providers = [
+        fetch_gdelt_trend_topics($runDate, $settings['gdelt'] ?? [], $userAgent),
+        fetch_media_cloud_trend_topics($runDate, $settings['media_cloud'] ?? [], $userAgent),
+        fetch_wikimedia_pageview_trend_topics($runDate, $settings['wikimedia_pageviews'] ?? [], $userAgent),
+        fetch_agencia_brasil_trend_topics($runDate, $settings['agencia_brasil'] ?? [], $userAgent),
+        fetch_hacker_news_trend_topics($runDate, $settings['hacker_news'] ?? [], $userAgent),
+    ];
+
+    foreach ($providers as $providerTopics) {
+        foreach ($providerTopics as $topic) {
+            if (count($topics) >= $maxItems) {
+                break 2;
+            }
+
+            $topics[] = $topic;
+        }
+    }
+
+    return $topics;
+}
+
+function fetch_gdelt_trend_topics(string $runDate, array $settings, string $userAgent): array
+{
+    if (empty($settings['enabled'])) {
+        return [];
+    }
+
+    $start = str_replace('-', '', $runDate) . '000000';
+    $end = str_replace('-', '', $runDate) . '235959';
+    $url = ($settings['url'] ?? 'https://api.gdeltproject.org/api/v2/doc/doc') . '?' . http_build_query([
+        'query' => $settings['query'] ?? 'brasil OR brazil',
+        'mode' => 'ArtList',
+        'format' => 'json',
+        'maxrecords' => (int) ($settings['max_items'] ?? 10),
+        'sort' => 'HybridRel',
+        'startdatetime' => $start,
+        'enddatetime' => $end,
+    ]);
+
+    $body = http_get_json($url, $userAgent);
+    $data = $body ? json_decode($body, true) : null;
+    if (!is_array($data) || empty($data['articles']) || !is_array($data['articles'])) {
+        return [];
+    }
+
+    $topics = [];
+    foreach ($data['articles'] as $article) {
+        $title = clean_context_text($article['title'] ?? '');
+        if ($title === '') {
+            continue;
+        }
+
+        $domain = clean_context_text($article['domain'] ?? '');
+        $text = trim($title . ' ' . $domain);
+        $topics[] = [
+            'title' => $title,
+            'keywords' => context_keywords_from_text($text, 4),
+            'source' => 'trend:gdelt',
+            'raw_text' => $text,
+            'source_url' => $article['url'] ?? null,
+        ];
+    }
+
+    return $topics;
+}
+
+function fetch_media_cloud_trend_topics(string $runDate, array $settings, string $userAgent): array
+{
+    if (empty($settings['enabled']) || empty($settings['url'])) {
+        return [];
+    }
+
+    $query = [
+        'q' => $settings['query'] ?? 'brasil OR brazil',
+        'query' => $settings['query'] ?? 'brasil OR brazil',
+        'start_date' => $runDate,
+        'end_date' => $runDate,
+        'page_size' => (int) ($settings['max_items'] ?? 10),
+        'limit' => (int) ($settings['max_items'] ?? 10),
+    ];
+    $headers = [];
+    if (!empty($settings['api_key'])) {
+        $headers[] = 'Authorization: Bearer ' . $settings['api_key'];
+    }
+
+    $separator = strpos($settings['url'], '?') === false ? '?' : '&';
+    $body = http_get_json($settings['url'] . $separator . http_build_query($query), $userAgent, $headers);
+    $data = $body ? json_decode($body, true) : null;
+    if (!is_array($data)) {
+        return [];
+    }
+
+    $stories = $data['stories'] ?? $data['results'] ?? $data['data'] ?? [];
+    if (!is_array($stories)) {
+        return [];
+    }
+
+    $topics = [];
+    foreach ($stories as $story) {
+        $title = clean_context_text($story['title'] ?? $story['name'] ?? '');
+        if ($title === '') {
+            continue;
+        }
+
+        $media = clean_context_text($story['media_name'] ?? $story['media'] ?? $story['domain'] ?? '');
+        $text = trim($title . ' ' . $media);
+        $topics[] = [
+            'title' => $title,
+            'keywords' => context_keywords_from_text($text, 4),
+            'source' => 'trend:media-cloud',
+            'raw_text' => $text,
+            'source_url' => $story['url'] ?? $story['story_url'] ?? null,
+        ];
+    }
+
+    return $topics;
+}
+
+function fetch_wikimedia_pageview_trend_topics(string $runDate, array $settings, string $userAgent): array
+{
+    if (empty($settings['enabled'])) {
+        return [];
+    }
+
+    $topics = [];
+    $maxItems = (int) ($settings['max_items'] ?? 12);
+    $projects = $settings['projects'] ?? ['pt.wikipedia'];
+    $date = wikimedia_pageviews_reference_date($runDate);
+
+    foreach ($projects as $project) {
+        if (count($topics) >= $maxItems) {
+            break;
+        }
+
+        $url = rtrim($settings['url'] ?? 'https://wikimedia.org/api/rest_v1/metrics/pageviews/top', '/')
+            . '/' . rawurlencode((string) $project)
+            . '/all-access/'
+            . $date->format('Y/m/d');
+
+        $body = http_get_json($url, $userAgent);
+        $data = $body ? json_decode($body, true) : null;
+        $articles = $data['items'][0]['articles'] ?? [];
+        if (!is_array($articles)) {
+            continue;
+        }
+
+        foreach ($articles as $article) {
+            if (count($topics) >= $maxItems) {
+                break 2;
+            }
+
+            $articleName = (string) ($article['article'] ?? '');
+            if ($articleName === '' || strpos($articleName, ':') !== false || $articleName === 'Main_Page') {
+                continue;
+            }
+
+            $title = str_replace('_', ' ', $articleName);
+            $views = (int) ($article['views'] ?? 0);
+            $topics[] = [
+                'title' => $title,
+                'keywords' => context_keywords_from_text($title, 3),
+                'source' => 'trend:wikimedia-pageviews:' . $project,
+                'raw_text' => $title . ' pageviews ' . $views,
+                'source_url' => 'https://' . $project . '.org/wiki/' . rawurlencode($articleName),
+            ];
+        }
+    }
+
+    return $topics;
+}
+
+function wikimedia_pageviews_reference_date(string $runDate): DateTimeImmutable
+{
+    $date = DateTimeImmutable::createFromFormat('Y-m-d', $runDate) ?: new DateTimeImmutable('today');
+    return $date->modify('-1 day');
+}
+
+function fetch_agencia_brasil_trend_topics(string $runDate, array $settings, string $userAgent): array
+{
+    if (empty($settings['enabled'])) {
+        return [];
+    }
+
+    $topics = [];
+    $maxItems = (int) ($settings['max_items'] ?? 10);
+    foreach (($settings['feeds'] ?? []) as $feed) {
+        if (count($topics) >= $maxItems) {
+            break;
+        }
+
+        $body = fetch_feed_body($feed, $userAgent);
+        if (!$body) {
+            continue;
+        }
+
+        foreach (parse_rss_items($body) as $item) {
+            if (count($topics) >= $maxItems) {
+                break 2;
+            }
+
+            $text = trim($item['title'] . ' ' . $item['description']);
+            $topics[] = [
+                'title' => $item['title'],
+                'keywords' => context_keywords_from_text($text, 4),
+                'source' => 'trend:agencia-brasil',
+                'raw_text' => $text,
+                'source_url' => $item['link'] ?? null,
+            ];
+        }
+    }
+
+    return $topics;
+}
+
+function fetch_hacker_news_trend_topics(string $runDate, array $settings, string $userAgent): array
+{
+    if (empty($settings['enabled'])) {
+        return [];
+    }
+
+    $body = http_get_json($settings['list_url'] ?? 'https://hacker-news.firebaseio.com/v0/topstories.json', $userAgent);
+    $ids = $body ? json_decode($body, true) : null;
+    if (!is_array($ids)) {
+        return [];
+    }
+
+    $topics = [];
+    $maxItems = (int) ($settings['max_items'] ?? 12);
+    $itemUrl = $settings['item_url'] ?? 'https://hacker-news.firebaseio.com/v0/item/%d.json';
+
+    foreach (array_slice($ids, 0, $maxItems * 2) as $id) {
+        if (count($topics) >= $maxItems) {
+            break;
+        }
+
+        $itemBody = http_get_json(sprintf($itemUrl, (int) $id), $userAgent);
+        $item = $itemBody ? json_decode($itemBody, true) : null;
+        if (!is_array($item) || ($item['type'] ?? '') !== 'story') {
+            continue;
+        }
+
+        $title = clean_context_text($item['title'] ?? '');
+        if ($title === '') {
+            continue;
+        }
+
+        $score = (int) ($item['score'] ?? 0);
+        $comments = (int) ($item['descendants'] ?? 0);
+        $topics[] = [
+            'title' => $title,
+            'keywords' => context_keywords_from_text($title, 3),
+            'source' => 'trend:hacker-news',
+            'raw_text' => $title . ' score ' . $score . ' comments ' . $comments,
+            'source_url' => $item['url'] ?? ('https://news.ycombinator.com/item?id=' . (int) $id),
+        ];
     }
 
     return $topics;
@@ -537,22 +799,49 @@ function parse_rss_items(string $body): array
     }
 
     $xml = @simplexml_load_string($body, 'SimpleXMLElement', LIBXML_NOCDATA);
-    if (!$xml || empty($xml->channel->item)) {
+    if (!$xml) {
         return [];
     }
 
     $items = [];
-    foreach ($xml->channel->item as $item) {
-        $title = trim(strip_tags((string) $item->title));
-        if ($title === '') {
-            continue;
-        }
 
-        $items[] = [
-            'title' => $title,
-            'description' => trim(strip_tags((string) $item->description)),
-            'link' => trim((string) $item->link),
-        ];
+    if (!empty($xml->channel->item)) {
+        foreach ($xml->channel->item as $item) {
+            $title = trim(strip_tags((string) $item->title));
+            if ($title === '') {
+                continue;
+            }
+
+            $items[] = [
+                'title' => $title,
+                'description' => trim(strip_tags((string) $item->description)),
+                'link' => trim((string) $item->link),
+            ];
+        }
+    }
+
+    if (!$items && !empty($xml->entry)) {
+        foreach ($xml->entry as $entry) {
+            $title = trim(strip_tags((string) $entry->title));
+            if ($title === '') {
+                continue;
+            }
+
+            $link = '';
+            foreach ($entry->link as $entryLink) {
+                $attributes = $entryLink->attributes();
+                if (!empty($attributes['href'])) {
+                    $link = (string) $attributes['href'];
+                    break;
+                }
+            }
+
+            $items[] = [
+                'title' => $title,
+                'description' => trim(strip_tags((string) ($entry->summary ?: $entry->content))),
+                'link' => $link,
+            ];
+        }
     }
 
     return $items;
@@ -578,6 +867,16 @@ function extract_news_keywords(string $text, int $minLength): array
     arsort($counts);
 
     return array_slice(array_keys($counts), 0, 12);
+}
+
+function context_keywords_from_text(string $text, int $minLength): string
+{
+    $keywords = extract_news_keywords($text, $minLength);
+    if ($keywords) {
+        return implode(' ', $keywords);
+    }
+
+    return normalize_context_key($text);
 }
 
 function news_stopwords(): array

@@ -55,7 +55,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza as coletas do M
         <form class="option-card" method="post">
             <span>Tendencias</span>
             <strong>Buscar temas em alta</strong>
-            <p>Coleta Google Trends ou deriva tendencias a partir das noticias.</p>
+            <p>Coleta GDELT, Wikimedia Pageviews, Agencia Brasil RSS e Hacker News. Media Cloud fica disponivel via configuracao.</p>
             <button name="action" value="trends" type="submit">Coletar tendencias</button>
         </form>
 
@@ -79,6 +79,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza as coletas do M
         </p>
         <p>Noticias persistidas: <?= h((string) $newsCount) ?></p>
         <p>Tendencias persistidas: <?= h((string) $trendCount) ?></p>
+        <p>Fontes de tendencias: GDELT, Media Cloud, Wikimedia Pageviews, Agencia Brasil RSS e Hacker News.</p>
         <p><a href="/admin/contexts.php">Ver base higienizada de contexto</a></p>
     </section>
 

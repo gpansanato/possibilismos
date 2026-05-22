@@ -50,19 +50,44 @@ $config = [
         ],
         'trends' => [
             'enabled' => true,
-            'max_items' => 20,
+            'max_items' => 45,
             'min_keyword_length' => 3,
-            'feeds' => [
-                [
-                    'name' => 'Google Trends Brasil',
-                    'url' => 'https://trends.google.com/trending/rss?geo=BR&hl=pt-BR',
-                    'fallback_url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=BR',
+            'feeds' => [],
+            'gdelt' => [
+                'enabled' => true,
+                'max_items' => 10,
+                'query' => 'brasil OR brazil OR tecnologia OR economia OR politica OR saude OR clima',
+                'url' => 'https://api.gdeltproject.org/api/v2/doc/doc',
+            ],
+            'media_cloud' => [
+                'enabled' => false,
+                'max_items' => 10,
+                'api_key' => '',
+                'url' => '',
+                'query' => 'brasil OR brazil OR tecnologia OR economia OR politica OR saude OR clima',
+            ],
+            'wikimedia_pageviews' => [
+                'enabled' => true,
+                'max_items' => 12,
+                'projects' => ['pt.wikipedia', 'en.wikipedia'],
+                'url' => 'https://wikimedia.org/api/rest_v1/metrics/pageviews/top',
+            ],
+            'agencia_brasil' => [
+                'enabled' => true,
+                'max_items' => 10,
+                'feeds' => [
+                    [
+                        'name' => 'Agencia Brasil Ultimas',
+                        'url' => 'https://agenciabrasil.ebc.com.br/feed/ultimasnoticias/feed.xml',
+                        'fallback_url' => 'https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml',
+                    ],
                 ],
-                [
-                    'name' => 'Google Trends Global',
-                    'url' => 'https://trends.google.com/trending/rss?geo=US&hl=en-US',
-                    'fallback_url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=US',
-                ],
+            ],
+            'hacker_news' => [
+                'enabled' => true,
+                'max_items' => 12,
+                'list_url' => 'https://hacker-news.firebaseio.com/v0/topstories.json',
+                'item_url' => 'https://hacker-news.firebaseio.com/v0/item/%d.json',
             ],
         ],
     ],

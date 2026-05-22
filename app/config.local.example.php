@@ -21,6 +21,11 @@ return [
         ],
         'trends' => [
             'enabled' => true,
+            'media_cloud' => [
+                'enabled' => false,
+                'api_key' => 'INFORME_A_CHAVE_SE_USAR_MEDIA_CLOUD',
+                'url' => 'INFORME_O_ENDPOINT_DA_API_MEDIA_CLOUD',
+            ],
         ],
     ],
 ];
