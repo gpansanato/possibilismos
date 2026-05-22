@@ -61,7 +61,6 @@ render_page_start('Eventos historicos', 'events', 'admin', 'Listagem completa da
             </p>
             <h2>Base de eventos</h2>
         </div>
-        <a class="button" href="/admin/event-new.php">Novo evento</a>
     </section>
 
     <section class="panel">

@@ -89,9 +89,7 @@ diversidade editorial      pequeno ajuste para evitar repeticao de categoria
 No admin, o processo pode ser operado em etapas:
 
 ```text
-/admin/collect-events.php  Coleta eventos historicos do dia
-/admin/collect-news.php    Coleta noticias e topicos do dia
-/admin/collect-trends.php  Coleta tendencias do dia
+/admin/collections.php     Tela unica de coletas operacionais
 /admin/contexts.php        Lista noticias e tendencias persistidas
 /admin/apply-score.php     Aplica o score de prioridade
 /admin/priority.php        Lista fatos ranqueados e parametros do score

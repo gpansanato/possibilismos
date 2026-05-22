@@ -7,17 +7,9 @@ $rankings = rankings_for_date($today['date']);
 render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de operacao e sugestoes geradas para hoje.');
 ?>
     <section class="option-grid" aria-label="Opcoes administrativas">
-        <a class="option-card" href="/admin/collect-events.php">
-            <span>Etapa 1</span>
-            <strong>Coletar eventos historicos</strong>
-        </a>
-        <a class="option-card" href="/admin/collect-news.php">
-            <span>Etapa 2</span>
-            <strong>Coletar noticias do dia</strong>
-        </a>
-        <a class="option-card" href="/admin/collect-trends.php">
-            <span>Etapa 3</span>
-            <strong>Coletar tendencias do dia</strong>
+        <a class="option-card" href="/admin/collections.php">
+            <span>Coletas</span>
+            <strong>Executar coletas operacionais</strong>
         </a>
         <a class="option-card" href="/admin/contexts.php">
             <span>Base higienizada</span>
@@ -37,11 +29,7 @@ render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de ope
         </a>
         <a class="option-card" href="/admin/events.php">
             <span>Base historica</span>
-            <strong>Cadastrar ou revisar eventos</strong>
-        </a>
-        <a class="option-card" href="/admin/event-new.php">
-            <span>Cadastro manual</span>
-            <strong>Adicionar novo evento</strong>
+            <strong>Revisar eventos coletados</strong>
         </a>
         <a class="option-card" href="/">
             <span>Site publico</span>

@@ -5,11 +5,8 @@ function nav_items(string $area): array
     if ($area === 'admin') {
         return [
             ['key' => 'dashboard', 'label' => 'Painel', 'href' => '/admin/dashboard.php'],
+            ['key' => 'collections', 'label' => 'Coletas', 'href' => '/admin/collections.php'],
             ['key' => 'events', 'label' => 'Eventos', 'href' => '/admin/events.php'],
-            ['key' => 'event-new', 'label' => 'Novo evento', 'href' => '/admin/event-new.php'],
-            ['key' => 'collect-events', 'label' => 'Coletar eventos', 'href' => '/admin/collect-events.php'],
-            ['key' => 'collect-news', 'label' => 'Coletar noticias', 'href' => '/admin/collect-news.php'],
-            ['key' => 'collect-trends', 'label' => 'Coletar tendencias', 'href' => '/admin/collect-trends.php'],
             ['key' => 'contexts', 'label' => 'Base contexto', 'href' => '/admin/contexts.php'],
             ['key' => 'apply-score', 'label' => 'Aplicar score', 'href' => '/admin/apply-score.php'],
             ['key' => 'priority', 'label' => 'Prioridade', 'href' => '/admin/priority.php'],
