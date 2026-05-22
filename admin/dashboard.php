@@ -7,9 +7,21 @@ $rankings = rankings_for_date($today['date']);
 render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de operacao e sugestoes geradas para hoje.');
 ?>
     <section class="option-grid" aria-label="Opcoes administrativas">
+        <a class="option-card" href="/admin/collect-events.php">
+            <span>Etapa 1</span>
+            <strong>Coletar eventos historicos</strong>
+        </a>
+        <a class="option-card" href="/admin/collect-news.php">
+            <span>Etapa 2</span>
+            <strong>Coletar noticias do dia</strong>
+        </a>
+        <a class="option-card" href="/admin/apply-score.php">
+            <span>Etapa 3</span>
+            <strong>Aplicar score de prioridade</strong>
+        </a>
         <a class="option-card" href="/admin/run.php">
-            <span>Execucao diaria</span>
-            <strong>Coletar e ranquear agora</strong>
+            <span>Automacao</span>
+            <strong>Executar processo completo</strong>
         </a>
         <a class="option-card" href="/admin/events.php">
             <span>Base historica</span>

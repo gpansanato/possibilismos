@@ -18,12 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = $e->getMessage();
     }
 }
-render_page_start('Rodar selecao diaria', 'run', 'admin', 'Executa coleta da internet, ranking e gravacao das sugestoes do dia.');
+render_page_start('Execucao completa', 'run', 'admin', 'Executa em sequencia: coleta de eventos, coleta de noticias e aplicacao do score.');
 ?>
     <section class="panel">
-        <h1>Rodar selecao diaria</h1>
+        <h1>Executar processo completo</h1>
         <form method="post">
-            <button type="submit">Executar agora</button>
+            <button type="submit">Executar todas as etapas</button>
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
         <p>Eventos aprovados para hoje: <?= h((string) $eventsAfter) ?></p>

@@ -76,3 +76,35 @@ function current_topics_count_for_date(string $runDate): int
 
     return (int) $stmt->fetchColumn();
 }
+
+function events_count_by_review_status(?int $month = null, ?int $day = null): array
+{
+    $where = [];
+    $params = [];
+
+    if ($month !== null) {
+        $where[] = 'event_month = ?';
+        $params[] = $month;
+    }
+
+    if ($day !== null) {
+        $where[] = 'event_day = ?';
+        $params[] = $day;
+    }
+
+    $sql = 'SELECT review_status, COUNT(*) total FROM events';
+    if ($where) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+    $sql .= ' GROUP BY review_status';
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+
+    $counts = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
+    foreach ($stmt->fetchAll() as $row) {
+        $counts[$row['review_status']] = (int) $row['total'];
+    }
+
+    return $counts;
+}

@@ -7,6 +7,27 @@ function run_daily_ranking(?string $runDate = null, ?int $limit = null): array
     $runDate = $runDate ?: $today['date'];
     $limit = $limit ?: (int) $config['cron']['default_limit'];
 
+    import_historical_events_for_today();
+    collect_daily_news_topics($runDate);
+
+    return apply_daily_priority_score($runDate, $limit);
+}
+
+function collect_daily_news_topics(?string $runDate = null): array
+{
+    $runDate = $runDate ?: today_key()['date'];
+    db()->prepare('DELETE FROM current_topics WHERE run_date = ?')->execute([$runDate]);
+
+    return current_topics_for_today($runDate);
+}
+
+function apply_daily_priority_score(?string $runDate = null, ?int $limit = null): array
+{
+    $config = require __DIR__ . '/config.php';
+    $today = today_key();
+    $runDate = $runDate ?: $today['date'];
+    $limit = $limit ?: (int) $config['cron']['default_limit'];
+
     $pdo = db();
     $pdo->beginTransaction();
 
@@ -18,10 +39,11 @@ function run_daily_ranking(?string $runDate = null, ?int $limit = null): array
         );
         $stmt->execute([$runDate]);
 
-        import_historical_events_for_today();
+        $topics = topics_for_date($runDate);
+        if (!$topics) {
+            $topics = collect_daily_news_topics($runDate);
+        }
 
-        $pdo->prepare('DELETE FROM current_topics WHERE run_date = ?')->execute([$runDate]);
-        $topics = current_topics_for_today($runDate);
         $events = events_for_day($today['month'], $today['day']);
         $ranked = rank_events($events, $topics, $today['year']);
 

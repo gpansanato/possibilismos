@@ -7,7 +7,10 @@ function nav_items(string $area): array
             ['key' => 'dashboard', 'label' => 'Painel', 'href' => '/admin/dashboard.php'],
             ['key' => 'events', 'label' => 'Eventos', 'href' => '/admin/events.php'],
             ['key' => 'event-new', 'label' => 'Novo evento', 'href' => '/admin/event-new.php'],
-            ['key' => 'run', 'label' => 'Rodar selecao', 'href' => '/admin/run.php'],
+            ['key' => 'collect-events', 'label' => 'Coletar eventos', 'href' => '/admin/collect-events.php'],
+            ['key' => 'collect-news', 'label' => 'Coletar noticias', 'href' => '/admin/collect-news.php'],
+            ['key' => 'apply-score', 'label' => 'Aplicar score', 'href' => '/admin/apply-score.php'],
+            ['key' => 'run', 'label' => 'Execucao completa', 'href' => '/admin/run.php'],
             ['key' => 'site', 'label' => 'Site publico', 'href' => '/'],
             ['key' => 'logout', 'label' => 'Sair', 'href' => '/admin/logout.php'],
         ];
