@@ -6,11 +6,15 @@ $error = null;
 $topics = null;
 $today = today_key();
 $topicsCount = current_topics_count_for_date_and_source($today['date'], 'trend');
+$derivedCount = 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $topics = collect_daily_trend_topics($today['date']);
         $topicsCount = count($topics);
+        $derivedCount = count(array_filter($topics, function ($topic) {
+            return ($topic['source'] ?? '') === 'trend:derived-news';
+        }));
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -25,6 +29,9 @@ render_page_start('Coletar tendencias', 'collect-trends', 'admin', 'Busca tenden
         </form>
         <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
         <p>Tendencias registradas para hoje: <?= h((string) $topicsCount) ?></p>
+        <?php if ($topics !== null): ?>
+            <p><?= h((string) $derivedCount) ?> tendencias vieram do fallback derivado de noticias.</p>
+        <?php endif; ?>
     </section>
 
     <?php if ($topics): ?>

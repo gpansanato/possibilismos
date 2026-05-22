@@ -96,3 +96,5 @@ No admin, o processo pode ser operado em etapas:
 /admin/priority.php        Lista fatos ranqueados e parametros do score
 /admin/run.php             Executa o processo completo
 ```
+
+A coleta de tendencias usa o RSS do Google Trends quando disponivel. Se a fonte falhar ou retornar vazio, o MVP deriva tendencias a partir dos termos mais frequentes nas noticias coletadas do dia, salvando esses itens como `trend:derived-news`.

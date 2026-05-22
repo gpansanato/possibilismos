@@ -55,11 +55,13 @@ $config = [
             'feeds' => [
                 [
                     'name' => 'Google Trends Brasil',
-                    'url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=BR',
+                    'url' => 'https://trends.google.com/trending/rss?geo=BR&hl=pt-BR',
+                    'fallback_url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=BR',
                 ],
                 [
                     'name' => 'Google Trends Global',
-                    'url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=US',
+                    'url' => 'https://trends.google.com/trending/rss?geo=US&hl=en-US',
+                    'fallback_url' => 'https://trends.google.com/trends/trendingsearches/daily/rss?geo=US',
                 ],
             ],
         ],

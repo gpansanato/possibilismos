@@ -82,7 +82,7 @@ function http_get_json(string $url, string $userAgent): ?string
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_USERAGENT => $userAgent,
             CURLOPT_HTTPHEADER => [
-                'Accept: application/json',
+                'Accept: application/json, application/rss+xml, application/xml;q=0.9, */*;q=0.8',
                 'Api-User-Agent: ' . $userAgent,
             ],
         ]);
@@ -99,7 +99,7 @@ function http_get_json(string $url, string $userAgent): ?string
             'method' => 'GET',
             'timeout' => 20,
             'header' => implode("\r\n", [
-                'Accept: application/json',
+                'Accept: application/json, application/rss+xml, application/xml;q=0.9, */*;q=0.8',
                 'User-Agent: ' . $userAgent,
                 'Api-User-Agent: ' . $userAgent,
             ]),
@@ -296,7 +296,7 @@ function fetch_current_news_topics(string $runDate): array
             break;
         }
 
-        $body = http_get_json($feed['url'], $config['sources']['wikimedia']['user_agent'] ?? 'PossibilismosMVP/0.1');
+        $body = fetch_feed_body($feed, $config['sources']['wikimedia']['user_agent'] ?? 'PossibilismosMVP/0.1');
         if (!$body) {
             continue;
         }
@@ -318,6 +318,60 @@ function fetch_current_news_topics(string $runDate): array
                 'source' => 'rss:' . ($feed['name'] ?? 'news'),
             ];
         }
+    }
+
+    return $topics ?: derive_trend_topics_from_news($runDate, $maxItems);
+}
+
+function fetch_feed_body(array $feed, string $userAgent): ?string
+{
+    $urls = [];
+    if (!empty($feed['url'])) {
+        $urls[] = $feed['url'];
+    }
+    if (!empty($feed['fallback_url'])) {
+        $urls[] = $feed['fallback_url'];
+    }
+
+    foreach ($urls as $url) {
+        $body = http_get_json($url, $userAgent);
+        if ($body) {
+            return $body;
+        }
+    }
+
+    return null;
+}
+
+function derive_trend_topics_from_news(string $runDate, int $maxItems): array
+{
+    $newsTopics = topics_for_date($runDate);
+    $newsTopics = array_values(array_filter($newsTopics, function ($topic) {
+        return strpos((string) $topic['source'], 'rss:') === 0;
+    }));
+
+    if (!$newsTopics) {
+        $newsTopics = fetch_current_news_topics($runDate);
+    }
+
+    $counts = [];
+    foreach ($newsTopics as $topic) {
+        foreach (preg_split('/\s+/u', normalize_score_text($topic['keywords'] ?? '')) as $keyword) {
+            if (mb_strlen($keyword, 'UTF-8') < 4) {
+                continue;
+            }
+            $counts[$keyword] = ($counts[$keyword] ?? 0) + 1;
+        }
+    }
+
+    arsort($counts);
+    $topics = [];
+    foreach (array_slice(array_keys($counts), 0, $maxItems) as $keyword) {
+        $topics[] = [
+            'title' => 'Tendencia: ' . $keyword,
+            'keywords' => $keyword,
+            'source' => 'trend:derived-news',
+        ];
     }
 
     return $topics;
