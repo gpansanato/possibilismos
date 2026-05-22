@@ -197,6 +197,32 @@ a {
     margin: 12px 0;
 }
 
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.status-badge.is-approved {
+    color: #027a48;
+    background: #ecfdf3;
+}
+
+.status-badge.is-rejected {
+    color: #b42318;
+    background: #fef3f2;
+}
+
 .form {
     display: grid;
     gap: 12px;

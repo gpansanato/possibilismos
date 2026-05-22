@@ -15,6 +15,10 @@ render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de ope
             <span>Base historica</span>
             <strong>Cadastrar ou revisar eventos</strong>
         </a>
+        <a class="option-card" href="/admin/event-new.php">
+            <span>Cadastro manual</span>
+            <strong>Adicionar novo evento</strong>
+        </a>
         <a class="option-card" href="/">
             <span>Site publico</span>
             <strong>Ver resultado publicado</strong>

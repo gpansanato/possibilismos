@@ -2,47 +2,17 @@
 require_once __DIR__ . '/../app/bootstrap.php';
 require_admin();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $stmt = db()->prepare(
-        'INSERT INTO events
-         (event_month, event_day, year, title, description, category, region, source_url, base_score, active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())'
-    );
-    $stmt->execute([
-        (int) $_POST['event_month'],
-        (int) $_POST['event_day'],
-        (int) $_POST['year'],
-        $_POST['title'],
-        $_POST['description'],
-        $_POST['category'],
-        $_POST['region'],
-        $_POST['source_url'] ?: null,
-        (float) $_POST['base_score'],
-    ]);
-
-    redirect('/admin/events.php');
-}
-
-$events = db()->query('SELECT * FROM events ORDER BY event_month, event_day, year')->fetchAll();
-render_page_start('Eventos historicos', 'events', 'admin', 'Cadastro e revisao da base usada pela selecao diaria.');
+$events = db()->query('SELECT * FROM events ORDER BY event_month, event_day, active DESC, year')->fetchAll();
+render_page_start('Eventos historicos', 'events', 'admin', 'Listagem completa da base historica usada pela selecao diaria.');
 ?>
-    <section class="panel">
-        <h1>Novo evento historico</h1>
-        <form class="form" method="post">
-            <label>Mes <input type="number" name="event_month" min="1" max="12" required></label>
-            <label>Dia <input type="number" name="event_day" min="1" max="31" required></label>
-            <label>Ano <input type="number" name="year" required></label>
-            <label>Titulo <input name="title" required></label>
-            <label>Descricao <textarea name="description" required></textarea></label>
-            <label>Categoria <input name="category" required></label>
-            <label>Regiao <input name="region" required></label>
-            <label>Fonte URL <input type="url" name="source_url"></label>
-            <label>Relevancia base <input type="number" name="base_score" min="0" max="100" step="0.1" value="50" required></label>
-            <button type="submit">Salvar</button>
-        </form>
+    <section class="section-heading">
+        <div>
+            <p class="eyebrow"><?= count($events) ?> eventos cadastrados</p>
+            <h2>Base de eventos</h2>
+        </div>
+        <a class="button" href="/admin/event-new.php">Novo evento</a>
     </section>
 
-    <h2>Eventos cadastrados</h2>
     <section class="list">
         <?php foreach ($events as $event): ?>
             <article class="event">
@@ -50,7 +20,20 @@ render_page_start('Eventos historicos', 'events', 'admin', 'Cadastro e revisao d
                 <div>
                     <h2><?= h($event['title']) ?></h2>
                     <p><?= h($event['description']) ?></p>
-                    <p class="meta"><?= h($event['event_day']) ?>/<?= h($event['event_month']) ?> | <?= h($event['category']) ?> | <?= h($event['region']) ?></p>
+                    <div class="meta">
+                        <span><?= h($event['event_day']) ?>/<?= h($event['event_month']) ?></span>
+                        <span><?= h($event['category']) ?></span>
+                        <span><?= h($event['region']) ?></span>
+                        <span>Score <?= h(number_format((float) $event['base_score'], 1)) ?></span>
+                        <span class="status-badge <?= (int) $event['active'] === 1 ? 'is-approved' : 'is-rejected' ?>">
+                            <?= (int) $event['active'] === 1 ? 'Aprovado' : 'Reprovado' ?>
+                        </span>
+                    </div>
+                    <form class="actions" method="post" action="/admin/update-event-status.php">
+                        <input type="hidden" name="id" value="<?= h((string) $event['id']) ?>">
+                        <button name="active" value="1" type="submit">Aprovar</button>
+                        <button class="danger" name="active" value="0" type="submit">Reprovar</button>
+                    </form>
                 </div>
             </article>
         <?php endforeach; ?>
