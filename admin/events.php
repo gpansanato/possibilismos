@@ -5,13 +5,16 @@ require_admin();
 $status = $_GET['status'] ?? 'all';
 $month = $_GET['month'] ?? '';
 $day = $_GET['day'] ?? '';
+$enrichment = $_GET['enrichment'] ?? 'all';
 $search = trim($_GET['q'] ?? '');
 $sort = $_GET['sort'] ?? 'date_asc';
 $allowedSorts = [
     'date_asc' => 'event_month ASC, event_day ASC, year ASC',
     'date_desc' => 'event_month DESC, event_day DESC, year ASC',
-    'score_desc' => 'base_score DESC, event_month ASC, event_day ASC, year ASC',
-    'score_asc' => 'base_score ASC, event_month ASC, event_day ASC, year ASC',
+    'priority_desc' => 'priority_score DESC, event_month ASC, event_day ASC, year ASC',
+    'priority_asc' => 'priority_score ASC, event_month ASC, event_day ASC, year ASC',
+    'score_desc' => 'priority_score DESC, event_month ASC, event_day ASC, year ASC',
+    'score_asc' => 'priority_score ASC, event_month ASC, event_day ASC, year ASC',
 ];
 if (!isset($allowedSorts[$sort])) {
     $sort = 'date_asc';
@@ -35,13 +38,28 @@ if ($day !== '') {
     $params[] = (int) $day;
 }
 
+if ($enrichment === 'enriched') {
+    $where[] = 'EXISTS (SELECT 1 FROM event_enrichments enx WHERE enx.event_id = e.id)';
+} elseif ($enrichment === 'not_enriched') {
+    $where[] = 'NOT EXISTS (SELECT 1 FROM event_enrichments enx WHERE enx.event_id = e.id)';
+} else {
+    $enrichment = 'all';
+}
+
 if ($search !== '') {
     $where[] = '(e.title LIKE ? OR e.description LIKE ? OR e.category LIKE ? OR e.region LIKE ? OR e.canonical_id LIKE ? OR e.canonical_source LIKE ?)';
     $term = '%' . $search . '%';
     array_push($params, $term, $term, $term, $term, $term, $term);
 }
 
-$sql = 'SELECT e.*, COALESCE(en.enrichment_count, 0) AS enrichment_count
+$sql = 'SELECT e.*, COALESCE(en.enrichment_count, 0) AS enrichment_count,
+            COALESCE((
+                SELECT dr.score
+                FROM daily_rankings dr
+                WHERE dr.event_id = e.id
+                ORDER BY dr.run_date DESC, dr.id DESC
+                LIMIT 1
+            ), 0) AS priority_score
         FROM events e
         LEFT JOIN (
             SELECT event_id, COUNT(*) AS enrichment_count
@@ -93,14 +111,21 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
                     <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>Reprovados</option>
                 </select>
             </label>
+            <label>Enriquecimento
+                <select name="enrichment">
+                    <option value="all" <?= $enrichment === 'all' ? 'selected' : '' ?>>Todos</option>
+                    <option value="enriched" <?= $enrichment === 'enriched' ? 'selected' : '' ?>>Enriquecidos</option>
+                    <option value="not_enriched" <?= $enrichment === 'not_enriched' ? 'selected' : '' ?>>Nao enriquecidos</option>
+                </select>
+            </label>
             <label>Mes <input type="number" name="month" min="1" max="12" value="<?= h($month) ?>"></label>
             <label>Dia <input type="number" name="day" min="1" max="31" value="<?= h($day) ?>"></label>
             <label>Ordenar
                 <select name="sort">
                     <option value="date_asc" <?= $sort === 'date_asc' ? 'selected' : '' ?>>Data crescente</option>
                     <option value="date_desc" <?= $sort === 'date_desc' ? 'selected' : '' ?>>Data decrescente</option>
-                    <option value="score_desc" <?= $sort === 'score_desc' ? 'selected' : '' ?>>Score maior</option>
-                    <option value="score_asc" <?= $sort === 'score_asc' ? 'selected' : '' ?>>Score menor</option>
+                    <option value="priority_desc" <?= in_array($sort, ['priority_desc', 'score_desc'], true) ? 'selected' : '' ?>>Prioridade maior</option>
+                    <option value="priority_asc" <?= in_array($sort, ['priority_asc', 'score_asc'], true) ? 'selected' : '' ?>>Prioridade menor</option>
                 </select>
             </label>
             <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Titulo, descricao, categoria ou regiao"></label>
@@ -118,8 +143,8 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
                     <th>Evento</th>
                     <th>Categoria</th>
                     <th>Origem</th>
-                    <th>Enriq.</th>
-                    <th>Score</th>
+                    <th>Enriquecido</th>
+                    <th>Prioridade</th>
                     <th>Estado</th>
                     <th>Acoes</th>
                 </tr>
@@ -135,8 +160,13 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
                         </td>
                         <td data-label="Categoria"><?= h($event['category']) ?></td>
                         <td data-label="Origem"><?= h($event['canonical_source'] ?: 'Wikimedia') ?></td>
-                        <td data-label="Enriq."><?= h((string) $event['enrichment_count']) ?></td>
-                        <td data-label="Score"><?= h(number_format((float) $event['base_score'], 1)) ?></td>
+                        <td data-label="Enriquecido">
+                            <span class="status-badge <?= ((int) $event['enrichment_count']) > 0 ? 'is-approved' : 'is-pending' ?>">
+                                <?= ((int) $event['enrichment_count']) > 0 ? 'Sim' : 'Nao' ?>
+                            </span>
+                            <small><?= h((string) $event['enrichment_count']) ?> registros</small>
+                        </td>
+                        <td data-label="Prioridade"><?= h(number_format((float) $event['priority_score'], 1)) ?></td>
                         <td data-label="Estado">
                             <span class="status-badge <?= h(event_review_status_class($event['review_status'])) ?>">
                                 <?= h(event_review_status_label($event['review_status'])) ?>
@@ -147,6 +177,7 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
                                 <input type="hidden" name="id" value="<?= h((string) $event['id']) ?>">
                                 <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
                                 <a class="button button-secondary" href="/admin/event-detail.php?id=<?= h((string) $event['id']) ?>">Detalhes</a>
+                                <button class="button-secondary" type="submit" formaction="/admin/enrich-event.php">Enriquecer</button>
                                 <button name="review_status" value="approved" type="submit">Aprovar</button>
                                 <button name="review_status" value="pending" type="submit">Pendente</button>
                                 <button class="danger" name="review_status" value="rejected" type="submit">Reprovar</button>

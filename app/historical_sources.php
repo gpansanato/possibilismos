@@ -107,7 +107,7 @@ function save_wikidata_historical_event(array $row, int $month, int $day): int
         $itemUrl ?: null,
         $wikidataId,
         $label,
-        76.00,
+        0.00,
     ]);
 
     $eventId = (int) db()->lastInsertId();

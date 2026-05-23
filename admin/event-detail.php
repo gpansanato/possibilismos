@@ -20,6 +20,7 @@ if (!$event) {
 
 $rankings = event_rankings((int) $event['id']);
 $enrichments = event_enrichments((int) $event['id']);
+$currentPriority = $rankings ? (float) $rankings[0]['score'] : 0.0;
 $returnTo = '/admin/event-detail.php?id=' . (int) $event['id'];
 
 render_page_start('Detalhes do evento', 'events', 'admin', 'Visualizacao completa do evento historico selecionado.');
@@ -44,8 +45,8 @@ render_page_start('Detalhes do evento', 'events', 'admin', 'Visualizacao complet
                 <p><span class="status-badge <?= h(event_review_status_class($event['review_status'])) ?>"><?= h(event_review_status_label($event['review_status'])) ?></span></p>
             </div>
             <div>
-                <span class="eyebrow">Score base</span>
-                <p><?= h(number_format((float) $event['base_score'], 1)) ?></p>
+                <span class="eyebrow">Prioridade atual</span>
+                <p><?= h(number_format($currentPriority, 1)) ?></p>
             </div>
             <div>
                 <span class="eyebrow">Categoria</span>
@@ -91,6 +92,7 @@ render_page_start('Detalhes do evento', 'events', 'admin', 'Visualizacao complet
             <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
             <button name="review_status" value="approved" type="submit">Aprovar</button>
             <button name="review_status" value="pending" type="submit">Marcar nao avaliado</button>
+            <button class="button-secondary" type="submit" formaction="/admin/enrich-event.php">Tentar enriquecer novamente</button>
             <button class="danger" name="review_status" value="rejected" type="submit">Reprovar</button>
         </form>
     </section>

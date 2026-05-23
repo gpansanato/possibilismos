@@ -124,6 +124,43 @@ function event_enrichments_count(int $eventId): int
     return (int) $stmt->fetchColumn();
 }
 
+function historical_collection_summary_for_day(int $month, int $day): array
+{
+    $stmt = db()->prepare(
+        'SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(e.review_status = "pending"), 0) AS pending,
+            COALESCE(SUM(e.review_status = "approved"), 0) AS approved,
+            COALESCE(SUM(e.review_status = "rejected"), 0) AS rejected,
+            COALESCE(SUM(e.canonical_id IS NOT NULL AND e.canonical_id <> ""), 0) AS canonical,
+            COALESCE(SUM(e.image_url IS NOT NULL AND e.image_url <> ""), 0) AS with_image,
+            COALESCE(SUM(COALESCE(en.enrichment_count, 0) > 0), 0) AS enriched,
+            COALESCE(SUM(COALESCE(en.enrichment_count, 0) = 0), 0) AS not_enriched,
+            COALESCE(SUM(COALESCE(en.enrichment_count, 0)), 0) AS enrichment_records
+         FROM events e
+         LEFT JOIN (
+            SELECT event_id, COUNT(*) AS enrichment_count
+            FROM event_enrichments
+            GROUP BY event_id
+         ) en ON en.event_id = e.id
+         WHERE e.event_month = ? AND e.event_day = ?'
+    );
+    $stmt->execute([$month, $day]);
+    $row = $stmt->fetch() ?: [];
+
+    return [
+        'total' => (int) ($row['total'] ?? 0),
+        'pending' => (int) ($row['pending'] ?? 0),
+        'approved' => (int) ($row['approved'] ?? 0),
+        'rejected' => (int) ($row['rejected'] ?? 0),
+        'canonical' => (int) ($row['canonical'] ?? 0),
+        'with_image' => (int) ($row['with_image'] ?? 0),
+        'enriched' => (int) ($row['enriched'] ?? 0),
+        'not_enriched' => (int) ($row['not_enriched'] ?? 0),
+        'enrichment_records' => (int) ($row['enrichment_records'] ?? 0),
+    ];
+}
+
 function current_topics_count_for_date(string $runDate): int
 {
     $stmt = db()->prepare('SELECT COUNT(*) FROM current_topics WHERE run_date = ?');

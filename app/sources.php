@@ -103,7 +103,7 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
         infer_event_category($description),
         infer_event_region($event, $language),
         $sourceUrl,
-        $type === 'selected' ? 72.00 : 58.00,
+        0.00,
     ]);
 
     $eventId = (int) db()->lastInsertId();
