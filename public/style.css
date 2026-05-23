@@ -781,6 +781,50 @@ button:hover,
     margin-top: 0;
 }
 
+.admin-toolbar,
+.bulk-toolbar,
+.date-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 10px;
+}
+
+.admin-toolbar {
+    justify-content: space-between;
+}
+
+.bulk-toolbar {
+    margin: 12px 0;
+}
+
+.date-filter label,
+.bulk-toolbar label {
+    min-width: 180px;
+}
+
+.button.is-compact,
+.icon-button,
+.row-actions .button,
+.row-actions button {
+    min-height: 30px;
+    padding: 5px 9px;
+    font-size: 12px;
+}
+
+.icon-button {
+    width: auto;
+}
+
+.table-sort {
+    color: var(--color-text-muted);
+    text-decoration: none;
+}
+
+.table-sort:hover {
+    color: var(--color-text-primary);
+}
+
 .dossier-hero {
     display: grid;
     gap: 18px;
@@ -936,8 +980,8 @@ button:hover,
 
 .row-actions .button,
 .row-actions button {
-    min-height: 34px;
-    padding: 6px 10px;
+    min-height: 30px;
+    padding: 5px 9px;
     font-size: 12px;
 }
 
@@ -1206,7 +1250,10 @@ pre {
         grid-template-columns: 1fr;
     }
 
-    .inline-filter {
+    .inline-filter,
+    .admin-toolbar,
+    .bulk-toolbar,
+    .date-filter {
         display: block;
     }
 

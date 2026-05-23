@@ -2,7 +2,11 @@
 require_once __DIR__ . '/../app/bootstrap.php';
 require_admin();
 
+$today = today_key();
+$message = null;
+$error = null;
 $status = $_GET['status'] ?? 'all';
+$date = $_GET['date'] ?? '';
 $month = $_GET['month'] ?? '';
 $day = $_GET['day'] ?? '';
 $enrichment = $_GET['enrichment'] ?? 'all';
@@ -11,13 +15,92 @@ $sort = $_GET['sort'] ?? 'date_asc';
 $allowedSorts = [
     'date_asc' => 'event_month ASC, event_day ASC, year ASC',
     'date_desc' => 'event_month DESC, event_day DESC, year ASC',
+    'year_asc' => 'year ASC, event_month ASC, event_day ASC',
+    'year_desc' => 'year DESC, event_month ASC, event_day ASC',
+    'title_asc' => 'title ASC, year ASC',
+    'title_desc' => 'title DESC, year ASC',
+    'category_asc' => 'category ASC, title ASC',
+    'source_asc' => 'canonical_source ASC, title ASC',
+    'enrichment_desc' => 'enrichment_count DESC, title ASC',
+    'enrichment_asc' => 'enrichment_count ASC, title ASC',
     'priority_desc' => 'priority_score DESC, event_month ASC, event_day ASC, year ASC',
     'priority_asc' => 'priority_score ASC, event_month ASC, event_day ASC, year ASC',
+    'status_asc' => 'review_status ASC, title ASC',
     'score_desc' => 'priority_score DESC, event_month ASC, event_day ASC, year ASC',
     'score_asc' => 'priority_score ASC, event_month ASC, event_day ASC, year ASC',
 ];
 if (!isset($allowedSorts[$sort])) {
     $sort = 'date_asc';
+}
+
+if ($date !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+    $parts = date_parts_from_run_date($date);
+    $month = (string) $parts['month'];
+    $day = (string) $parts['day'];
+} elseif ($date === '') {
+    $date = sprintf('%04d-%02d-%02d', (int) date('Y'), $month !== '' ? (int) $month : $today['month'], $day !== '' ? (int) $day : $today['day']);
+}
+
+$returnTo = '/admin/events.php';
+if ($_SERVER['QUERY_STRING'] ?? '') {
+    $returnTo .= '?' . $_SERVER['QUERY_STRING'];
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    $actionDate = $_POST['date'] ?? $date;
+    if (!is_string($actionDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $actionDate)) {
+        $actionDate = $today['date'];
+    }
+    $parts = date_parts_from_run_date($actionDate);
+    $selectedIds = array_values(array_filter(array_map('intval', $_POST['selected_ids'] ?? [])));
+    $postReturnTo = $_POST['return_to'] ?? ('/admin/events.php?date=' . $actionDate);
+    if (!is_string($postReturnTo) || strpos($postReturnTo, '/admin/') !== 0) {
+        $postReturnTo = '/admin/events.php?date=' . $actionDate;
+    }
+
+    try {
+        if ($action === 'collect_events') {
+            $result = collect_historical_events_for_day($parts['month'], $parts['day']);
+            $message = $result['imported'] . ' eventos coletados e ' . $result['enriched'] . ' enriquecimentos salvos.';
+            $month = (string) $parts['month'];
+            $day = (string) $parts['day'];
+            $date = $actionDate;
+        } elseif ($action === 'enrich_events') {
+            $scope = $_POST['enrich_scope'] ?? 'day';
+            if ($scope === 'selected' && !$selectedIds) {
+                $ids = [];
+                $error = 'Selecione ao menos um evento para enriquecer.';
+            } else {
+                $ids = $selectedIds ?: event_ids_for_day($parts['month'], $parts['day']);
+            }
+            $enriched = 0;
+            foreach ($ids as $eventId) {
+                $enriched += enrich_historical_event((int) $eventId);
+            }
+            if ($ids) {
+                $message = count($ids) . ' eventos processados para enriquecimento; ' . $enriched . ' registros salvos/atualizados.';
+            }
+        } elseif ($action === 'prioritize_events') {
+            $result = apply_daily_priority_score($actionDate);
+            $message = count($result) . ' eventos priorizados para ' . $actionDate . '.';
+        } elseif ($action === 'bulk_status') {
+            $reviewStatus = $_POST['review_status'] ?? '';
+            if (!$selectedIds) {
+                $error = 'Selecione ao menos um evento para aplicar a ação.';
+            } elseif (!in_array($reviewStatus, ['pending', 'approved', 'rejected'], true)) {
+                $error = 'Ação editorial inválida.';
+            } else {
+                $stmt = db()->prepare('UPDATE events SET review_status = ?, active = ? WHERE id = ?');
+                foreach ($selectedIds as $eventId) {
+                    $stmt->execute([$reviewStatus, event_active_from_review_status($reviewStatus), $eventId]);
+                }
+                $message = count($selectedIds) . ' eventos atualizados.';
+            }
+        }
+    } catch (Throwable $e) {
+        $error = $e->getMessage();
+    }
 }
 
 $where = [];
@@ -83,17 +166,35 @@ foreach ($counts as $row) {
     $countByStatus[$row['review_status']] = (int) $row['total'];
 }
 
-render_page_start('Eventos historicos', 'events', 'admin', 'Listagem completa da base historica usada pela selecao diaria.');
-$returnTo = '/admin/events.php';
-if ($_SERVER['QUERY_STRING'] ?? '') {
-    $returnTo .= '?' . $_SERVER['QUERY_STRING'];
-}
+render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, enriquecimento e priorização dos fatos históricos.');
 ?>
+    <?php if ($error): ?><section class="empty"><p><?= h($error) ?></p></section><?php endif; ?>
+    <?php if ($message): ?><section class="panel"><p><?= h($message) ?></p></section><?php endif; ?>
+
+    <section class="panel admin-toolbar">
+        <form class="date-filter" method="get">
+            <label>Data dos fatos <input type="date" name="date" value="<?= h($date) ?>"></label>
+            <input type="hidden" name="status" value="<?= h($status) ?>">
+            <input type="hidden" name="enrichment" value="<?= h($enrichment) ?>">
+            <input type="hidden" name="q" value="<?= h($search) ?>">
+            <button type="submit">Filtrar data</button>
+            <a class="button button-secondary" href="/admin/events.php">Hoje</a>
+        </form>
+        <form class="actions actions-inline" method="post">
+            <input type="hidden" name="date" value="<?= h($date) ?>">
+            <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
+            <button name="action" value="collect_events" type="submit">Coletar eventos</button>
+            <input type="hidden" name="enrich_scope" value="day">
+            <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer dia</button>
+            <button class="button-secondary" name="action" value="prioritize_events" type="submit">Priorizar</button>
+        </form>
+    </section>
+
     <section class="section-heading">
         <div>
             <p class="eyebrow">
-                <?= count($events) ?> eventos na lista |
-                <?= h((string) $countByStatus['pending']) ?> nao avaliados |
+                <?= count($events) ?> eventos |
+                <?= h((string) $countByStatus['pending']) ?> não avaliados |
                 <?= h((string) $countByStatus['approved']) ?> aprovados |
                 <?= h((string) $countByStatus['rejected']) ?> reprovados
             </p>
@@ -103,10 +204,11 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
 
     <section class="panel">
         <form class="filter-form" method="get">
+            <input type="hidden" name="date" value="<?= h($date) ?>">
             <label>Estado
                 <select name="status">
                     <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>Todos</option>
-                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Nao avaliados</option>
+                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Não avaliados</option>
                     <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>Aprovados</option>
                     <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>Reprovados</option>
                 </select>
@@ -115,77 +217,97 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
                 <select name="enrichment">
                     <option value="all" <?= $enrichment === 'all' ? 'selected' : '' ?>>Todos</option>
                     <option value="enriched" <?= $enrichment === 'enriched' ? 'selected' : '' ?>>Enriquecidos</option>
-                    <option value="not_enriched" <?= $enrichment === 'not_enriched' ? 'selected' : '' ?>>Nao enriquecidos</option>
+                    <option value="not_enriched" <?= $enrichment === 'not_enriched' ? 'selected' : '' ?>>Não enriquecidos</option>
                 </select>
             </label>
-            <label>Mes <input type="number" name="month" min="1" max="12" value="<?= h($month) ?>"></label>
-            <label>Dia <input type="number" name="day" min="1" max="31" value="<?= h($day) ?>"></label>
-            <label>Ordenar
-                <select name="sort">
-                    <option value="date_asc" <?= $sort === 'date_asc' ? 'selected' : '' ?>>Data crescente</option>
-                    <option value="date_desc" <?= $sort === 'date_desc' ? 'selected' : '' ?>>Data decrescente</option>
-                    <option value="priority_desc" <?= in_array($sort, ['priority_desc', 'score_desc'], true) ? 'selected' : '' ?>>Prioridade maior</option>
-                    <option value="priority_asc" <?= in_array($sort, ['priority_asc', 'score_asc'], true) ? 'selected' : '' ?>>Prioridade menor</option>
-                </select>
-            </label>
-            <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Titulo, descricao, categoria ou regiao"></label>
+            <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Título, descrição, categoria ou região"></label>
             <button type="submit">Filtrar</button>
-            <a class="button button-secondary" href="/admin/events.php">Limpar</a>
+            <a class="button button-secondary" href="/admin/events.php?date=<?= h($date) ?>">Limpar</a>
         </form>
     </section>
 
-    <section class="table-wrap">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Data</th>
-                    <th>Ano</th>
-                    <th>Evento</th>
-                    <th>Categoria</th>
-                    <th>Origem</th>
-                    <th>Enriquecido</th>
-                    <th>Prioridade</th>
-                    <th>Estado</th>
-                    <th>Acoes</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($events as $event): ?>
+    <form method="post">
+        <input type="hidden" name="date" value="<?= h($date) ?>">
+        <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
+        <section class="bulk-toolbar">
+            <label>Ação em lote
+                <select name="review_status">
+                    <option value="approved">Aprovar selecionados</option>
+                    <option value="pending">Marcar pendente</option>
+                    <option value="rejected">Reprovar selecionados</option>
+                </select>
+            </label>
+            <input type="hidden" name="enrich_scope" value="selected">
+            <button name="action" value="bulk_status" type="submit">Aplicar</button>
+            <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer selecionados</button>
+        </section>
+
+        <section class="table-wrap">
+            <table class="data-table">
+                <thead>
                     <tr>
-                        <td data-label="Data"><?= h(str_pad((string) $event['event_day'], 2, '0', STR_PAD_LEFT)) ?>/<?= h(str_pad((string) $event['event_month'], 2, '0', STR_PAD_LEFT)) ?></td>
-                        <td data-label="Ano"><?= h($event['year']) ?></td>
-                        <td data-label="Evento">
-                            <a class="table-title" href="/admin/event-detail.php?id=<?= h((string) $event['id']) ?>"><?= h($event['title']) ?></a>
-                            <small><?= h($event['region']) ?></small>
-                        </td>
-                        <td data-label="Categoria"><?= h($event['category']) ?></td>
-                        <td data-label="Origem"><?= h($event['canonical_source'] ?: 'Wikimedia') ?></td>
-                        <td data-label="Enriquecido">
-                            <span class="status-badge <?= ((int) $event['enrichment_count']) > 0 ? 'is-approved' : 'is-pending' ?>">
-                                <?= ((int) $event['enrichment_count']) > 0 ? 'Sim' : 'Nao' ?>
-                            </span>
-                            <small><?= h((string) $event['enrichment_count']) ?> registros</small>
-                        </td>
-                        <td data-label="Prioridade"><?= h(number_format((float) $event['priority_score'], 1)) ?></td>
-                        <td data-label="Estado">
-                            <span class="status-badge <?= h(event_review_status_class($event['review_status'])) ?>">
-                                <?= h(event_review_status_label($event['review_status'])) ?>
-                            </span>
-                        </td>
-                        <td data-label="Acoes">
-                            <form class="row-actions" method="post" action="/admin/update-event-status.php">
-                                <input type="hidden" name="id" value="<?= h((string) $event['id']) ?>">
-                                <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
-                                <a class="button button-secondary" href="/admin/event-detail.php?id=<?= h((string) $event['id']) ?>">Detalhes</a>
-                                <button class="button-secondary" type="submit" formaction="/admin/enrich-event.php">Enriquecer</button>
-                                <button name="review_status" value="approved" type="submit">Aprovar</button>
-                                <button name="review_status" value="pending" type="submit">Pendente</button>
-                                <button class="danger" name="review_status" value="rejected" type="submit">Reprovar</button>
-                            </form>
-                        </td>
+                        <th><input type="checkbox" aria-label="Selecionar todos" onclick="document.querySelectorAll('.event-select').forEach(cb => cb.checked = this.checked)"></th>
+                        <th><?= sort_link('Data', 'date_asc', 'date_desc', $sort) ?></th>
+                        <th><?= sort_link('Ano', 'year_asc', 'year_desc', $sort) ?></th>
+                        <th><?= sort_link('Evento', 'title_asc', 'title_desc', $sort) ?></th>
+                        <th><?= sort_link('Categoria', 'category_asc', 'category_asc', $sort) ?></th>
+                        <th><?= sort_link('Origem', 'source_asc', 'source_asc', $sort) ?></th>
+                        <th><?= sort_link('Enriquecido', 'enrichment_desc', 'enrichment_asc', $sort) ?></th>
+                        <th><?= sort_link('Prioridade', 'priority_desc', 'priority_asc', $sort) ?></th>
+                        <th><?= sort_link('Estado', 'status_asc', 'status_asc', $sort) ?></th>
+                        <th>Ações</th>
                     </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </section>
+                </thead>
+                <tbody>
+                    <?php foreach ($events as $event): ?>
+                        <tr>
+                            <td data-label="Sel."><input class="event-select" type="checkbox" name="selected_ids[]" value="<?= h((string) $event['id']) ?>"></td>
+                            <td data-label="Data"><?= h(str_pad((string) $event['event_day'], 2, '0', STR_PAD_LEFT)) ?>/<?= h(str_pad((string) $event['event_month'], 2, '0', STR_PAD_LEFT)) ?></td>
+                            <td data-label="Ano"><?= h($event['year']) ?></td>
+                            <td data-label="Evento">
+                                <a class="table-title" href="/admin/event-detail.php?id=<?= h((string) $event['id']) ?>"><?= h($event['title']) ?></a>
+                                <small><?= h($event['region']) ?></small>
+                            </td>
+                            <td data-label="Categoria"><?= h($event['category']) ?></td>
+                            <td data-label="Origem"><?= h($event['canonical_source'] ?: 'Wikimedia') ?></td>
+                            <td data-label="Enriquecido">
+                                <span class="status-badge <?= ((int) $event['enrichment_count']) > 0 ? 'is-approved' : 'is-pending' ?>">
+                                    <?= ((int) $event['enrichment_count']) > 0 ? 'Sim' : 'Não' ?>
+                                </span>
+                                <small><?= h((string) $event['enrichment_count']) ?></small>
+                            </td>
+                            <td data-label="Prioridade"><?= h(number_format((float) $event['priority_score'], 1)) ?></td>
+                            <td data-label="Estado">
+                                <span class="status-badge <?= h(event_review_status_class($event['review_status'])) ?>">
+                                    <?= h(event_review_status_label($event['review_status'])) ?>
+                                </span>
+                            </td>
+                            <td data-label="Ações">
+                                <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='approved'; this.closest('tr').querySelector('.event-select').checked=true" title="Aprovar" type="submit">Aprovar</button>
+                                <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='pending'; this.closest('tr').querySelector('.event-select').checked=true" title="Pendente" type="submit">Pendente</button>
+                                <button class="icon-button danger" name="action" value="bulk_status" onclick="this.form.review_status.value='rejected'; this.closest('tr').querySelector('.event-select').checked=true" title="Reprovar" type="submit">Reprovar</button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </section>
+    </form>
 <?php render_page_end(); ?>
+
+<?php
+function event_ids_for_day(int $month, int $day): array
+{
+    $stmt = db()->prepare('SELECT id FROM events WHERE event_month = ? AND event_day = ?');
+    $stmt->execute([$month, $day]);
+    return array_map('intval', array_column($stmt->fetchAll(), 'id'));
+}
+
+function sort_link(string $label, string $asc, string $desc, string $currentSort): string
+{
+    $target = $currentSort === $asc ? $desc : $asc;
+    $params = $_GET;
+    $params['sort'] = $target;
+    $indicator = in_array($currentSort, [$asc, $desc], true) ? ($currentSort === $asc ? ' ↑' : ' ↓') : '';
+    return '<a class="table-sort" href="/admin/events.php?' . h(http_build_query($params)) . '">' . h($label . $indicator) . '</a>';
+}

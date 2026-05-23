@@ -3,190 +3,85 @@ require_once __DIR__ . '/../app/bootstrap.php';
 require_admin();
 
 $today = today_key();
-$message = null;
-$error = null;
-$items = [];
-$rankingResult = null;
-$eventsBefore = events_count_for_day($today['month'], $today['day']);
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-
-    try {
-        if ($action === 'historical_events') {
-            $result = collect_historical_events_for_day($today['month'], $today['day']);
-            $message = $result['imported'] . ' eventos historicos importados/coletados e ' . $result['enriched'] . ' enriquecimentos salvos.';
-        } elseif ($action === 'news') {
-            $items = collect_daily_news_topics($today['date']);
-            $message = count($items) . ' noticias persistidas/coletadas.';
-        } elseif ($action === 'trends') {
-            $items = collect_daily_trend_topics($today['date']);
-            $message = count($items) . ' tendencias persistidas/coletadas.';
-        } elseif ($action === 'context') {
-            $news = collect_daily_news_topics($today['date']);
-            $trends = collect_daily_trend_topics($today['date']);
-            $items = array_merge($news, $trends);
-            $message = count($news) . ' noticias e ' . count($trends) . ' tendencias persistidas/coletadas.';
-        } elseif ($action === 'full_run') {
-            $rankingResult = run_daily_ranking();
-            $message = 'Execucao completa finalizada com ' . count($rankingResult) . ' eventos ranqueados.';
-        }
-    } catch (Throwable $e) {
-        $error = $e->getMessage();
-    }
+$date = $_GET['date'] ?? $today['date'];
+if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+    $date = $today['date'];
 }
+$dateParts = date_parts_from_run_date($date);
 
-$eventCounts = events_count_by_review_status($today['month'], $today['day']);
-$historicalSummary = historical_collection_summary_for_day($today['month'], $today['day']);
-$newsCount = collected_contexts_count_for_date($today['date'], 'news');
-$trendCount = collected_contexts_count_for_date($today['date'], 'trend');
-$topicsCount = current_topics_count_for_date($today['date']);
-$rankingCount = rankings_count_for_date($today['date']);
+$eventCounts = events_count_by_review_status($dateParts['month'], $dateParts['day']);
+$historicalSummary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
+$newsCount = collected_contexts_count_for_date($date, 'news');
+$trendCount = collected_contexts_count_for_date($date, 'trend');
+$topicsCount = current_topics_count_for_date($date);
+$rankingCount = rankings_count_for_date($date);
 $collectionRows = [
     [
-        'date' => $today['date'],
-        'name' => 'Eventos historicos',
-        'status' => $historicalSummary['total'] > 0 ? 'Concluida' : 'Pendente',
+        'date' => $date,
+        'name' => 'Eventos históricos',
+        'status' => $historicalSummary['total'] > 0 ? 'Concluída' : 'Pendente',
         'count' => $historicalSummary['total'],
-        'detail' => $eventCounts['pending'] . ' nao avaliados, ' . $eventCounts['approved'] . ' aprovados, ' . $eventCounts['rejected'] . ' reprovados',
-        'href' => '/admin/events.php?month=' . $today['month'] . '&day=' . $today['day'],
+        'detail' => $eventCounts['pending'] . ' não avaliados, ' . $eventCounts['approved'] . ' aprovados, ' . $eventCounts['rejected'] . ' reprovados',
+        'href' => '/admin/events.php?date=' . $date,
     ],
     [
-        'date' => $today['date'],
-        'name' => 'Noticias',
-        'status' => $newsCount > 0 ? 'Concluida' : 'Pendente',
+        'date' => $date,
+        'name' => 'Enriquecimento histórico',
+        'status' => $historicalSummary['enriched'] > 0 ? 'Em andamento' : 'Pendente',
+        'count' => $historicalSummary['enrichment_records'],
+        'detail' => $historicalSummary['enriched'] . ' eventos enriquecidos, ' . $historicalSummary['not_enriched'] . ' pendentes',
+        'href' => '/admin/events.php?date=' . $date . '&enrichment=not_enriched',
+    ],
+    [
+        'date' => $date,
+        'name' => 'Notícias',
+        'status' => $newsCount > 0 ? 'Concluída' : 'Pendente',
         'count' => $newsCount,
         'detail' => 'Itens higienizados em collected_contexts',
-        'href' => '/admin/contexts.php?date=' . $today['date'] . '&type=news',
+        'href' => '/admin/contexts.php?date=' . $date . '&type=news',
     ],
     [
-        'date' => $today['date'],
-        'name' => 'Tendencias',
-        'status' => $trendCount > 0 ? 'Concluida' : 'Pendente',
+        'date' => $date,
+        'name' => 'Tendências',
+        'status' => $trendCount > 0 ? 'Concluída' : 'Pendente',
         'count' => $trendCount,
-        'detail' => 'GDELT, Media Cloud, Wikimedia, Agencia Brasil e Hacker News',
-        'href' => '/admin/contexts.php?date=' . $today['date'] . '&type=trend',
+        'detail' => 'GDELT, Media Cloud, Wikimedia, Agência Brasil e Hacker News',
+        'href' => '/admin/contexts.php?date=' . $date . '&type=trend',
     ],
     [
-        'date' => $today['date'],
-        'name' => 'Topicos de priorizacao',
-        'status' => $topicsCount > 0 ? 'Disponivel' : 'Pendente',
+        'date' => $date,
+        'name' => 'Tópicos de priorização',
+        'status' => $topicsCount > 0 ? 'Disponível' : 'Pendente',
         'count' => $topicsCount,
         'detail' => 'Registros operacionais em current_topics',
-        'href' => '/admin/contexts.php?date=' . $today['date'],
+        'href' => '/admin/contexts.php?date=' . $date,
     ],
     [
-        'date' => $today['date'],
-        'name' => 'Priorizacao aplicada',
-        'status' => $rankingCount > 0 ? 'Concluida' : 'Pendente',
+        'date' => $date,
+        'name' => 'Priorização aplicada',
+        'status' => $rankingCount > 0 ? 'Concluída' : 'Pendente',
         'count' => $rankingCount,
         'detail' => 'Registros salvos em daily_rankings',
-        'href' => '/admin/priority.php?date=' . $today['date'],
+        'href' => '/admin/priority.php?date=' . $date,
     ],
 ];
 
-render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individuais, contexto e execucao completa do processo diario.');
+render_page_start('Coletas', 'collections', 'admin', 'Resumo do status das coletas e processamentos por data.');
 ?>
-    <section class="option-grid" aria-label="Acoes de coleta">
-        <form class="option-card is-featured" method="post">
-            <span>Execucao completa</span>
-            <strong>Rodar processo diario</strong>
-            <p>Executa eventos historicos, noticias, tendencias e priorizacao em sequencia.</p>
-            <button name="action" value="full_run" type="submit">Executar tudo</button>
-        </form>
-
-        <form class="option-card" method="post">
-            <span>Eventos historicos</span>
-            <strong>Buscar fatos do dia</strong>
-            <p>Importa eventos da Wikimedia como nao avaliados para curadoria.</p>
-            <button name="action" value="historical_events" type="submit">Coletar eventos</button>
-        </form>
-
-        <form class="option-card" method="post">
-            <span>Noticias</span>
-            <strong>Buscar noticias do dia</strong>
-            <p>Coleta RSS, higieniza, deduplica e atualiza topicos de noticias.</p>
-            <button name="action" value="news" type="submit">Coletar noticias</button>
-        </form>
-
-        <form class="option-card" method="post">
-            <span>Tendencias</span>
-            <strong>Buscar temas em alta</strong>
-            <p>Coleta GDELT, Wikimedia Pageviews, Agencia Brasil RSS e Hacker News. Media Cloud fica disponivel via configuracao.</p>
-            <button name="action" value="trends" type="submit">Coletar tendencias</button>
-        </form>
-
-        <form class="option-card" method="post">
-            <span>Contexto completo</span>
-            <strong>Noticias + tendencias</strong>
-            <p>Atualiza todo o contexto usado na priorizacao sem recalcular os eventos.</p>
-            <button name="action" value="context" type="submit">Coletar contexto</button>
-        </form>
-    </section>
-
-    <?php if ($error): ?><section class="empty"><p><?= h($error) ?></p></section><?php endif; ?>
-    <?php if ($message): ?><section class="panel"><p><?= h($message) ?></p></section><?php endif; ?>
-
     <section class="panel">
-        <div class="section-heading">
-            <div>
-                <p class="eyebrow"><?= h($today['date']) ?></p>
-                <h2>Evolucao da coleta historica</h2>
-            </div>
-            <a class="button button-secondary" href="/admin/events.php?month=<?= h((string) $today['month']) ?>&day=<?= h((string) $today['day']) ?>">Ver eventos</a>
-        </div>
-        <div class="table-wrap table-wrap--plain">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Etapa</th>
-                        <th>Status</th>
-                        <th>Registros</th>
-                        <th>Detalhe</th>
-                        <th>Acoes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td data-label="Etapa"><strong>Identificacao canonica</strong></td>
-                        <td data-label="Status"><span class="status-badge <?= $historicalSummary['canonical'] > 0 ? 'is-approved' : 'is-pending' ?>"><?= $historicalSummary['canonical'] > 0 ? 'Disponivel' : 'Pendente' ?></span></td>
-                        <td data-label="Registros"><?= h((string) $historicalSummary['canonical']) ?></td>
-                        <td data-label="Detalhe">Eventos associados a Wikidata ou fonte canonica equivalente.</td>
-                        <td data-label="Acoes"><a class="button button-secondary" href="/admin/events.php?month=<?= h((string) $today['month']) ?>&day=<?= h((string) $today['day']) ?>">Acessar</a></td>
-                    </tr>
-                    <tr>
-                        <td data-label="Etapa"><strong>Eventos coletados</strong></td>
-                        <td data-label="Status"><span class="status-badge <?= $historicalSummary['total'] > 0 ? 'is-approved' : 'is-pending' ?>"><?= $historicalSummary['total'] > 0 ? 'Disponivel' : 'Pendente' ?></span></td>
-                        <td data-label="Registros"><?= h((string) $historicalSummary['total']) ?></td>
-                        <td data-label="Detalhe"><?= h($historicalSummary['pending'] . ' nao avaliados, ' . $historicalSummary['approved'] . ' aprovados, ' . $historicalSummary['rejected'] . ' reprovados') ?></td>
-                        <td data-label="Acoes"><a class="button button-secondary" href="/admin/events.php?month=<?= h((string) $today['month']) ?>&day=<?= h((string) $today['day']) ?>">Listar</a></td>
-                    </tr>
-                    <tr>
-                        <td data-label="Etapa"><strong>Enriquecimento</strong></td>
-                        <td data-label="Status"><span class="status-badge <?= $historicalSummary['enriched'] > 0 ? 'is-approved' : 'is-pending' ?>"><?= $historicalSummary['enriched'] > 0 ? 'Em andamento' : 'Pendente' ?></span></td>
-                        <td data-label="Registros"><?= h((string) $historicalSummary['enrichment_records']) ?></td>
-                        <td data-label="Detalhe"><?= h($historicalSummary['enriched'] . ' eventos enriquecidos, ' . $historicalSummary['not_enriched'] . ' pendentes, ' . $historicalSummary['with_image'] . ' com imagem') ?></td>
-                        <td data-label="Acoes"><a class="button button-secondary" href="/admin/events.php?month=<?= h((string) $today['month']) ?>&day=<?= h((string) $today['day']) ?>&enrichment=not_enriched">Pendentes</a></td>
-                    </tr>
-                    <tr>
-                        <td data-label="Etapa"><strong>Priorizacao</strong></td>
-                        <td data-label="Status"><span class="status-badge <?= $rankingCount > 0 ? 'is-approved' : 'is-pending' ?>"><?= $rankingCount > 0 ? 'Aplicada' : 'Nao aplicada' ?></span></td>
-                        <td data-label="Registros"><?= h((string) $rankingCount) ?></td>
-                        <td data-label="Detalhe">Eventos coletados permanecem com prioridade 0 ate o calculo diario.</td>
-                        <td data-label="Acoes"><a class="button button-secondary" href="/admin/priority.php?date=<?= h($today['date']) ?>">Ver priorizacao</a></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <form class="date-filter" method="get">
+            <label>Data de referência <input type="date" name="date" value="<?= h($date) ?>"></label>
+            <button type="submit">Ver status</button>
+            <a class="button button-secondary" href="/admin/collections.php">Hoje</a>
+        </form>
     </section>
 
     <section class="panel">
         <div class="section-heading">
             <div>
-                <p class="eyebrow"><?= h($today['date']) ?></p>
+                <p class="eyebrow"><?= h($date) ?></p>
                 <h2>Status das coletas</h2>
             </div>
-            <a class="button button-secondary" href="/admin/contexts.php">Base higienizada</a>
         </div>
         <div class="table-wrap table-wrap--plain">
             <table class="data-table">
@@ -197,7 +92,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individ
                         <th>Status</th>
                         <th>Registros</th>
                         <th>Detalhe</th>
-                        <th>Acoes</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -205,36 +100,14 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individ
                         <tr>
                             <td data-label="Data"><?= h($row['date']) ?></td>
                             <td data-label="Coleta"><strong><?= h($row['name']) ?></strong></td>
-                            <td data-label="Status">
-                                <span class="status-badge <?= $row['count'] > 0 ? 'is-approved' : 'is-pending' ?>">
-                                    <?= h($row['status']) ?>
-                                </span>
-                            </td>
+                            <td data-label="Status"><span class="status-badge <?= $row['count'] > 0 ? 'is-approved' : 'is-pending' ?>"><?= h($row['status']) ?></span></td>
                             <td data-label="Registros"><?= h((string) $row['count']) ?></td>
                             <td data-label="Detalhe"><?= h($row['detail']) ?></td>
-                            <td data-label="Acoes"><a class="button button-secondary" href="<?= h($row['href']) ?>">Acessar</a></td>
+                            <td data-label="Ações"><a class="button button-secondary is-compact" href="<?= h($row['href']) ?>">Abrir</a></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
-        <?php if ($rankingResult !== null): ?>
-            <p>Antes da execucao completa havia <?= h((string) $eventsBefore) ?> eventos aprovados para hoje.</p>
-        <?php endif; ?>
     </section>
-
-    <?php if ($items): ?>
-        <section class="list">
-            <?php foreach (array_slice($items, 0, 12) as $item): ?>
-                <article class="event">
-                    <div class="year"><?= h($item['context_type'] ?? 'ctx') ?></div>
-                    <div>
-                        <h2><?= h($item['title']) ?></h2>
-                        <p class="meta"><?= h($item['source']) ?></p>
-                        <p><?= h($item['keywords']) ?></p>
-                    </div>
-                </article>
-            <?php endforeach; ?>
-        </section>
-    <?php endif; ?>
 <?php render_page_end(); ?>
