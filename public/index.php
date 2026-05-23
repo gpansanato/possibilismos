@@ -1,8 +1,6 @@
 <?php
 require_once __DIR__ . '/../app/bootstrap.php';
 
-$today = today_key();
-$items = published_rankings_for_date($today['date']);
 render_page_start('Possibilismos', 'home', 'public', null, false);
 ?>
     <section class="hero">
@@ -11,7 +9,7 @@ render_page_start('Possibilismos', 'home', 'public', null, false);
             <h1>Fatos historicos priorizados pelo contexto do dia.</h1>
             <p>Coleta eventos, noticias e tendencias para apoiar uma curadoria diaria clara, auditavel e pronta para publicacao.</p>
             <div class="hero__actions">
-                <a class="button button-primary" href="#fatos-de-hoje">Ver fatos publicados</a>
+                <a class="button button-primary" href="/eventos.php">Ver eventos publicados</a>
                 <a class="button button-secondary" href="/admin/login.php">Acessar operacao</a>
             </div>
         </div>
@@ -153,41 +151,6 @@ render_page_start('Possibilismos', 'home', 'public', null, false);
         </div>
     </section>
 
-    <section id="fatos-de-hoje" class="landing-section">
-        <div class="section-copy">
-            <?php component_badge($today['date']); ?>
-            <h2>Fatos aprovados de hoje.</h2>
-        </div>
-
-        <?php if (!$items): ?>
-            <section class="empty">
-                <h2>Nenhum fato aprovado para hoje.</h2>
-                <p>A operacao pode coletar contexto, aplicar score e aprovar os fatos no painel administrativo.</p>
-            </section>
-        <?php endif; ?>
-
-        <section class="list">
-            <?php foreach ($items as $item): ?>
-                <article class="event">
-                    <div class="year"><?= h($item['year']) ?></div>
-                    <div>
-                        <h2><?= h($item['title']) ?></h2>
-                        <p><?= h($item['description']) ?></p>
-                        <p class="context"><?= h($item['context_summary']) ?></p>
-                        <div class="meta">
-                            <span><?= h($item['category']) ?></span>
-                            <span><?= h($item['region']) ?></span>
-                            <span>Score <?= h(number_format((float) $item['score'], 1)) ?></span>
-                        </div>
-                        <?php if ($item['source_url']): ?>
-                            <a class="source" href="<?= h($item['source_url']) ?>" target="_blank" rel="noopener">Fonte</a>
-                        <?php endif; ?>
-                    </div>
-                </article>
-            <?php endforeach; ?>
-        </section>
-    </section>
-
     <section class="final-cta">
         <div>
             <?php component_badge('Proximo ciclo'); ?>
@@ -196,7 +159,7 @@ render_page_start('Possibilismos', 'home', 'public', null, false);
         </div>
         <div class="hero__actions">
             <a class="button button-primary" href="/admin/login.php">Operar painel</a>
-            <a class="button button-secondary" href="#fatos-de-hoje">Ver publicacoes</a>
+            <a class="button button-secondary" href="/eventos.php">Ver publicacoes</a>
         </div>
     </section>
 <?php render_page_end(); ?>

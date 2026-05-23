@@ -18,7 +18,7 @@ function nav_items(string $area): array
 
     return [
         ['key' => 'home', 'label' => 'Inicio', 'href' => '/'],
-        ['key' => 'today', 'label' => 'Fatos de hoje', 'href' => '/#fatos-de-hoje'],
+        ['key' => 'events', 'label' => 'Eventos publicados', 'href' => '/eventos.php'],
         ['key' => 'admin', 'label' => 'Admin', 'href' => '/admin/login.php'],
     ];
 }
@@ -81,7 +81,7 @@ function render_page_end(): void
             </div>
             <nav aria-label="Links de rodape">
                 <a href="/">Produto</a>
-                <a href="/#fatos-de-hoje">Publicacoes</a>
+                <a href="/eventos.php">Publicacoes</a>
                 <a href="/admin/login.php">Admin</a>
                 <a href="/admin/db-check.php">Status</a>
             </nav>

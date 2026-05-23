@@ -55,6 +55,105 @@ function published_rankings_for_date(string $runDate): array
     return $stmt->fetchAll();
 }
 
+function published_rankings_search(string $runDate, string $category = '', string $region = '', string $search = '', string $sort = 'score_desc'): array
+{
+    $allowedSorts = [
+        'score_desc' => 'r.score DESC, r.id ASC',
+        'year_asc' => 'e.year ASC, r.score DESC',
+        'year_desc' => 'e.year DESC, r.score DESC',
+        'title_asc' => 'e.title ASC, r.score DESC',
+    ];
+    if (!isset($allowedSorts[$sort])) {
+        $sort = 'score_desc';
+    }
+
+    $where = ['r.run_date = ?', 'r.status = "approved"', 'e.review_status = "approved"'];
+    $params = [$runDate];
+
+    if ($category !== '') {
+        $where[] = 'e.category = ?';
+        $params[] = $category;
+    }
+
+    if ($region !== '') {
+        $where[] = 'e.region = ?';
+        $params[] = $region;
+    }
+
+    if ($search !== '') {
+        $where[] = '(e.title LIKE ? OR e.description LIKE ? OR r.context_summary LIKE ? OR r.reasons LIKE ?)';
+        $term = '%' . $search . '%';
+        array_push($params, $term, $term, $term, $term);
+    }
+
+    $sql = 'SELECT r.*, e.year, e.title, e.description, e.category, e.region, e.source_url, e.image_url, e.canonical_id, e.canonical_source, e.enriched_at,
+                COALESCE(en.enrichment_count, 0) AS enrichment_count
+            FROM daily_rankings r
+            JOIN events e ON e.id = r.event_id
+            LEFT JOIN (
+                SELECT event_id, COUNT(*) AS enrichment_count
+                FROM event_enrichments
+                GROUP BY event_id
+            ) en ON en.event_id = e.id
+            WHERE ' . implode(' AND ', $where) . '
+            ORDER BY ' . $allowedSorts[$sort];
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+
+    return $stmt->fetchAll();
+}
+
+function published_ranking_filter_options(string $runDate): array
+{
+    $stmt = db()->prepare(
+        'SELECT DISTINCT e.category
+         FROM daily_rankings r
+         JOIN events e ON e.id = r.event_id
+         WHERE r.run_date = ? AND r.status = "approved" AND e.review_status = "approved" AND e.category <> ""
+         ORDER BY e.category ASC'
+    );
+    $stmt->execute([$runDate]);
+    $categories = array_map(static fn($row) => $row['category'], $stmt->fetchAll());
+
+    $stmt = db()->prepare(
+        'SELECT DISTINCT e.region
+         FROM daily_rankings r
+         JOIN events e ON e.id = r.event_id
+         WHERE r.run_date = ? AND r.status = "approved" AND e.review_status = "approved" AND e.region <> ""
+         ORDER BY e.region ASC'
+    );
+    $stmt->execute([$runDate]);
+    $regions = array_map(static fn($row) => $row['region'], $stmt->fetchAll());
+
+    return [
+        'categories' => $categories,
+        'regions' => $regions,
+    ];
+}
+
+function published_ranking_counts_for_month(int $year, int $month): array
+{
+    $start = sprintf('%04d-%02d-01', $year, $month);
+    $end = (new DateTimeImmutable($start))->modify('last day of this month')->format('Y-m-d');
+
+    $stmt = db()->prepare(
+        'SELECT r.run_date, COUNT(*) AS total
+         FROM daily_rankings r
+         JOIN events e ON e.id = r.event_id
+         WHERE r.run_date BETWEEN ? AND ? AND r.status = "approved" AND e.review_status = "approved"
+         GROUP BY r.run_date'
+    );
+    $stmt->execute([$start, $end]);
+
+    $counts = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $counts[$row['run_date']] = (int) $row['total'];
+    }
+
+    return $counts;
+}
+
 function rankings_for_date(string $runDate): array
 {
     $stmt = db()->prepare(
