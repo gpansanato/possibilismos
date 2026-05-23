@@ -124,14 +124,16 @@ render_page_start('Eventos históricos publicados', 'events', 'public', 'Consult
                 <?php foreach ($items as $item): ?>
                     <article class="published-card">
                         <?php if ($item['image_url']): ?>
-                            <img class="published-card__image" src="<?= h($item['image_url']) ?>" alt="">
+                            <a href="/evento.php?id=<?= h((string) $item['id']) ?>" aria-label="Abrir dossiê de <?= h($item['title']) ?>">
+                                <img class="published-card__image" src="<?= h($item['image_url']) ?>" alt="">
+                            </a>
                         <?php endif; ?>
                         <div class="published-card__body">
                             <div class="published-card__top">
                                 <span class="year"><?= h($item['year']) ?></span>
                                 <span class="status-badge is-approved">Prioridade <?= h(number_format((float) $item['score'], 1)) ?></span>
                             </div>
-                            <h3><?= h($item['title']) ?></h3>
+                            <h3><a class="table-title" href="/evento.php?id=<?= h((string) $item['id']) ?>"><?= h($item['title']) ?></a></h3>
                             <p><?= h($item['description']) ?></p>
                             <p class="context"><?= h($item['context_summary']) ?></p>
                             <div class="meta">
@@ -149,6 +151,7 @@ render_page_start('Eventos históricos publicados', 'events', 'public', 'Consult
                             <?php if ($item['source_url']): ?>
                                 <a class="source" href="<?= h($item['source_url']) ?>" target="_blank" rel="noopener">Abrir fonte original</a>
                             <?php endif; ?>
+                            <p><a class="button button-secondary" href="/evento.php?id=<?= h((string) $item['id']) ?>">Abrir dossiê</a></p>
                         </div>
                     </article>
                 <?php endforeach; ?>
