@@ -9,15 +9,15 @@ function nav_items(string $area): array
             ['key' => 'events', 'label' => 'Eventos', 'href' => '/admin/events.php'],
             ['key' => 'contexts', 'label' => 'Base contexto', 'href' => '/admin/contexts.php'],
             ['key' => 'apply-score', 'label' => 'Priorizar eventos', 'href' => '/admin/apply-score.php'],
-            ['key' => 'priority', 'label' => 'Priorizacoes', 'href' => '/admin/priority.php'],
+            ['key' => 'priority', 'label' => 'Priorizações', 'href' => '/admin/priority.php'],
             ['key' => 'db-check', 'label' => 'Banco', 'href' => '/admin/db-check.php'],
-            ['key' => 'site', 'label' => 'Site publico', 'href' => '/'],
+            ['key' => 'site', 'label' => 'Site público', 'href' => '/'],
             ['key' => 'logout', 'label' => 'Sair', 'href' => '/admin/logout.php'],
         ];
     }
 
     return [
-        ['key' => 'home', 'label' => 'Inicio', 'href' => '/'],
+        ['key' => 'home', 'label' => 'Início', 'href' => '/'],
         ['key' => 'events', 'label' => 'Eventos publicados', 'href' => '/eventos.php'],
         ['key' => 'admin', 'label' => 'Admin', 'href' => '/admin/login.php'],
     ];
@@ -42,11 +42,11 @@ function render_page_start(string $title, string $active = 'home', string $area 
                 <span class="brand__mark">P</span>
                 <span>
                     <strong><?= h($config['app_name']) ?></strong>
-                    <small>Fatos historicos em contexto</small>
+                    <small>Curadoria histórica editorial</small>
                 </span>
             </a>
 
-            <nav class="main-nav" aria-label="Navegacao principal">
+            <nav class="main-nav" aria-label="Navegação principal">
                 <?php foreach (nav_items($area) as $item): ?>
                     <a class="<?= $active === $item['key'] ? 'is-active' : '' ?>" href="<?= h($item['href']) ?>">
                         <?= h($item['label']) ?>
@@ -59,7 +59,7 @@ function render_page_start(string $title, string $active = 'home', string $area 
     <main class="page">
         <?php if ($showHeading): ?>
             <header class="page-heading">
-                <p class="eyebrow"><?= h($area === 'admin' ? 'Administracao' : 'Publico') ?></p>
+                <p class="eyebrow"><?= h($area === 'admin' ? 'Administração' : 'Público') ?></p>
                 <h1><?= h($title) ?></h1>
                 <?php if ($subtitle): ?>
                     <p><?= h($subtitle) ?></p>
@@ -71,17 +71,18 @@ function render_page_start(string $title, string $active = 'home', string $area 
 
 function render_page_end(): void
 {
+    $config = require __DIR__ . '/config.php';
     ?>
     </main>
     <footer class="site-footer">
         <div class="site-footer__inner">
             <div>
-                <strong>Possibilismos</strong>
-                <p>Curadoria historica conectada ao contexto atual.</p>
+                <strong><?= h($config['app_name']) ?></strong>
+                <p>Esteira editorial para fatos históricos contextualizados.</p>
             </div>
-            <nav aria-label="Links de rodape">
+            <nav aria-label="Links de rodapé">
                 <a href="/">Produto</a>
-                <a href="/eventos.php">Publicacoes</a>
+                <a href="/eventos.php">Publicações</a>
                 <a href="/admin/login.php">Admin</a>
                 <a href="/admin/db-check.php">Status</a>
             </nav>

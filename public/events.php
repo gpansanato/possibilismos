@@ -27,18 +27,19 @@ $filterOptions = published_ranking_filter_options($date);
 $items = published_rankings_search($date, $category, $region, $search, $sort);
 
 $dateLabel = $selectedDate->format('d/m/Y');
+$publishedLabel = count($items) === 1 ? '1 insumo editorial publicado' : count($items) . ' insumos editoriais publicados';
 
-render_page_start('Eventos historicos publicados', 'events', 'public', 'Consulte os eventos historicos priorizados e publicados por data.', true);
+render_page_start('Eventos históricos publicados', 'events', 'public', 'Consulte os fatos priorizados, aprovados e preparados para publicação editorial.', true);
 ?>
     <section class="public-events-layout">
-        <aside class="calendar-panel" aria-label="Calendario de publicacoes">
+        <aside class="calendar-panel" aria-label="Calendário de publicações">
             <div class="calendar-panel__head">
                 <a class="button button-secondary" href="/eventos.php?date=<?= h($previousMonthDate) ?>">Anterior</a>
                 <div>
-                    <span class="eyebrow">Calendario</span>
+                    <span class="eyebrow">Calendário</span>
                     <h2><?= h($calendarStart->format('m/Y')) ?></h2>
                 </div>
-                <a class="button button-secondary" href="/eventos.php?date=<?= h($nextMonthDate) ?>">Proximo</a>
+                <a class="button button-secondary" href="/eventos.php?date=<?= h($nextMonthDate) ?>">Próximo</a>
             </div>
             <div class="calendar-grid" role="grid">
                 <?php foreach (['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'] as $weekday): ?>
@@ -68,15 +69,15 @@ render_page_start('Eventos historicos publicados', 'events', 'public', 'Consulte
                     </a>
                 <?php endfor; ?>
             </div>
-            <p class="calendar-note">Os numeros indicam quantos eventos foram priorizados e publicados em cada data.</p>
+            <p class="calendar-note">Os números indicam quantos fatos foram priorizados, aprovados e publicados em cada data.</p>
         </aside>
 
         <section class="published-events">
             <div class="section-heading">
                 <div>
                     <?php component_badge($dateLabel); ?>
-                    <h2><?= h(count($items) . ' eventos publicados') ?></h2>
-                    <p>Visualizacao publica dos eventos aprovados pela curadoria e priorizados pelo contexto do dia.</p>
+                    <h2><?= h($publishedLabel) ?></h2>
+                    <p>Visualização pública dos fatos aprovados pela curadoria, com prioridade, fonte e motivo editorial.</p>
                 </div>
                 <a class="button button-secondary" href="/eventos.php">Hoje</a>
             </div>
@@ -91,7 +92,7 @@ render_page_start('Eventos historicos publicados', 'events', 'public', 'Consulte
                         <?php endforeach; ?>
                     </select>
                 </label>
-                <label>Regiao
+                <label>Região
                     <select name="region">
                         <option value="">Todas</option>
                         <?php foreach ($filterOptions['regions'] as $option): ?>
@@ -104,7 +105,7 @@ render_page_start('Eventos historicos publicados', 'events', 'public', 'Consulte
                         <option value="score_desc" <?= $sort === 'score_desc' ? 'selected' : '' ?>>Prioridade</option>
                         <option value="year_asc" <?= $sort === 'year_asc' ? 'selected' : '' ?>>Ano crescente</option>
                         <option value="year_desc" <?= $sort === 'year_desc' ? 'selected' : '' ?>>Ano decrescente</option>
-                        <option value="title_asc" <?= $sort === 'title_asc' ? 'selected' : '' ?>>Titulo</option>
+                        <option value="title_asc" <?= $sort === 'title_asc' ? 'selected' : '' ?>>Título</option>
                     </select>
                 </label>
                 <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Evento, contexto ou motivo"></label>
@@ -114,8 +115,8 @@ render_page_start('Eventos historicos publicados', 'events', 'public', 'Consulte
 
             <?php if (!$items): ?>
                 <section class="empty">
-                    <h2>Nenhum evento publicado para esta data.</h2>
-                    <p>Use o calendario para navegar por outras datas ou acompanhe a proxima rodada de publicacao.</p>
+                    <h2>Nenhum fato publicado para esta data.</h2>
+                    <p>Use o calendário para navegar por outras datas ou acompanhe a próxima rodada de publicação editorial.</p>
                 </section>
             <?php endif; ?>
 
@@ -141,7 +142,7 @@ render_page_start('Eventos historicos publicados', 'events', 'public', 'Consulte
                             </div>
                             <?php if ($item['reasons']): ?>
                                 <details class="reason-box">
-                                    <summary>Motivo da priorizacao</summary>
+                                    <summary>Motivo da priorização</summary>
                                     <p><?= h($item['reasons']) ?></p>
                                 </details>
                             <?php endif; ?>

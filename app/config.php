@@ -1,7 +1,7 @@
 <?php
 
 $config = [
-    'app_name' => 'Historico Diario',
+    'app_name' => 'Histórico Diário',
     'timezone' => 'America/Sao_Paulo',
 
     'db' => [
