@@ -139,6 +139,7 @@ render_page_start('Dossiê editorial', 'events', 'admin', 'Evento histórico est
     <section class="panel dossier-block">
         <span class="badge">Score explicável</span>
         <h1>Decomposição da prioridade</h1>
+        <p class="meta">A decomposição usa a priorização salva e reconstrói os componentes com os contextos da data. Se parâmetros mudarem depois da execução, pequenas diferenças podem aparecer.</p>
         <div class="score-breakdown">
             <?php foreach ([
                 'historical' => ['Relevância histórica', 'Peso aplicado sobre o score base do evento.'],

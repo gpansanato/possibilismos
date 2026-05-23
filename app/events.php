@@ -21,10 +21,10 @@ function events_count_for_day(int $month, int $day): int
 function event_review_status_label(string $status): string
 {
     return [
-        'pending' => 'Nao avaliado',
+        'pending' => 'Não avaliado',
         'approved' => 'Aprovado',
         'rejected' => 'Reprovado',
-    ][$status] ?? 'Nao avaliado';
+    ][$status] ?? 'Não avaliado';
 }
 
 function event_review_status_class(string $status): string

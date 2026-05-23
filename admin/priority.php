@@ -19,20 +19,20 @@ $newsCount = collected_contexts_count_for_date($runDate, 'news');
 $trendsCount = collected_contexts_count_for_date($runDate, 'trend');
 $currentYear = (int) substr($runDate, 0, 4);
 
-render_page_start('Priorizacoes de eventos', 'priority', 'admin', 'Lista os eventos historicos priorizados e explica os motivos usados no calculo.');
+render_page_start('Priorizações de eventos', 'priority', 'admin', 'Lista os eventos históricos priorizados e explica os motivos usados no cálculo.');
 ?>
     <section class="panel">
-        <h1>Criterios de priorizacao</h1>
+        <h1>Critérios de priorização</h1>
         <div class="feature-grid feature-grid--three">
-            <article class="feature-card"><h3>Relevancia historica</h3><p>Parte do score base do evento ja curado.</p></article>
-            <article class="feature-card"><h3>Contexto do dia</h3><p>Relaciona o evento com todas as noticias e tendencias higienizadas da data.</p></article>
-            <article class="feature-card"><h3>Marco temporal</h3><p>Aplica bonus quando o aniversario historico e editorialmente relevante.</p></article>
+            <article class="feature-card"><h3>Relevância histórica</h3><p>Parte do score base do evento já curado.</p></article>
+            <article class="feature-card"><h3>Contexto do dia</h3><p>Relaciona o evento com todas as notícias e tendências higienizadas da data.</p></article>
+            <article class="feature-card"><h3>Marco temporal</h3><p>Aplica bônus quando o aniversário histórico é editorialmente relevante.</p></article>
         </div>
     </section>
 
     <section class="panel">
         <h1>Ajustes finos</h1>
-        <?php if ($saved): ?><p>Parametros atualizados.</p><?php endif; ?>
+        <?php if ($saved): ?><p>Parâmetros atualizados.</p><?php endif; ?>
         <form class="settings-grid" method="post">
             <?php foreach ($definitions as $key => $definition): ?>
                 <label>
@@ -40,7 +40,7 @@ render_page_start('Priorizacoes de eventos', 'priority', 'admin', 'Lista os even
                     <input type="number" step="0.01" name="settings[<?= h($key) ?>]" value="<?= h((string) $settings[$key]) ?>">
                 </label>
             <?php endforeach; ?>
-            <button type="submit">Salvar parametros</button>
+            <button type="submit">Salvar parâmetros</button>
         </form>
     </section>
 
@@ -49,10 +49,10 @@ render_page_start('Priorizacoes de eventos', 'priority', 'admin', 'Lista os even
             <p class="eyebrow">
                 <?= h($runDate) ?> |
                 <?= count($rankings) ?> fatos priorizados |
-                <?= h((string) $newsCount) ?> noticias |
-                <?= h((string) $trendsCount) ?> tendencias
+                <?= h((string) $newsCount) ?> notícias |
+                <?= h((string) $trendsCount) ?> tendências
             </p>
-            <h2>Eventos historicos priorizados</h2>
+            <h2>Eventos históricos priorizados</h2>
         </div>
         <form class="inline-filter" method="get">
             <label>Data <input type="date" name="date" value="<?= h($runDate) ?>"></label>
@@ -62,7 +62,7 @@ render_page_start('Priorizacoes de eventos', 'priority', 'admin', 'Lista os even
 
     <?php if (!$rankings): ?>
         <section class="empty">
-            <p>Nenhuma priorizacao aplicada para esta data. Use a etapa Priorizar eventos.</p>
+            <p>Nenhuma priorização aplicada para esta data. Use a etapa Priorizar eventos.</p>
         </section>
     <?php endif; ?>
 
@@ -93,14 +93,14 @@ render_page_start('Priorizacoes de eventos', 'priority', 'admin', 'Lista os even
                     <p><?= h($item['description']) ?></p>
                     <div class="meta">
                         <span>Prioridade salva <?= h(number_format((float) $item['score'], 1)) ?></span>
-                        <span>Publicacao <?= h($item['status']) ?></span>
+                        <span>Publicação <?= h($item['status']) ?></span>
                         <span>Evento <?= h(event_review_status_label($item['review_status'])) ?></span>
                     </div>
                     <div class="score-grid">
-                        <span>Historico: <?= h(number_format($components['historical'], 1)) ?></span>
-                        <span>Noticias: <?= h(number_format($components['news'], 1)) ?></span>
-                        <span>Tendencias: <?= h(number_format($components['trends'], 1)) ?></span>
-                        <span>Aniversario: <?= h(number_format($components['anniversary'], 1)) ?></span>
+                        <span>Histórico: <?= h(number_format($components['historical'], 1)) ?></span>
+                        <span>Notícias: <?= h(number_format($components['news'], 1)) ?></span>
+                        <span>Tendências: <?= h(number_format($components['trends'], 1)) ?></span>
+                        <span>Aniversário: <?= h(number_format($components['anniversary'], 1)) ?></span>
                         <span>Categoria: <?= h(number_format($components['category'], 1)) ?></span>
                         <span>Diversidade: <?= h(number_format($components['diversity'], 1)) ?></span>
                     </div>

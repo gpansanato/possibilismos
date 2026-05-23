@@ -290,23 +290,23 @@ function build_score_reasons(array $event, array $components, int $currentYear):
 {
     $reasons = [];
     $details = is_array($components['_details'] ?? null) ? $components['_details'] : [];
-    $reasons[] = 'relevancia historica base ' . number_format((float) $event['base_score'], 1) . ' com peso aplicado de ' . number_format((float) $components['historical'], 1);
+    $reasons[] = 'relevância histórica base ' . number_format((float) $event['base_score'], 1) . ' com peso aplicado de ' . number_format((float) $components['historical'], 1);
 
     if ($components['news'] > 0) {
         $keywords = implode(', ', array_slice($details['news_keywords'] ?? [], 0, 6));
         $titles = implode(' | ', array_slice($details['news_titles'] ?? [], 0, 2));
-        $reasons[] = 'conexao com ' . (int) ($details['news_topics'] ?? 0) . ' noticias por termos: ' . ($keywords ?: 'nao informado') . ($titles ? ' em "' . $titles . '"' : '') . ' +' . number_format($components['news'], 1);
+        $reasons[] = 'conexão com ' . (int) ($details['news_topics'] ?? 0) . ' notícias por termos: ' . ($keywords ?: 'não informado') . ($titles ? ' em "' . $titles . '"' : '') . ' +' . number_format($components['news'], 1);
     }
 
     if ($components['trends'] > 0) {
         $keywords = implode(', ', array_slice($details['trend_keywords'] ?? [], 0, 6));
         $titles = implode(' | ', array_slice($details['trend_titles'] ?? [], 0, 2));
-        $reasons[] = 'conexao com ' . (int) ($details['trend_topics'] ?? 0) . ' tendencias por termos: ' . ($keywords ?: 'nao informado') . ($titles ? ' em "' . $titles . '"' : '') . ' +' . number_format($components['trends'], 1);
+        $reasons[] = 'conexão com ' . (int) ($details['trend_topics'] ?? 0) . ' tendências por termos: ' . ($keywords ?: 'não informado') . ($titles ? ' em "' . $titles . '"' : '') . ' +' . number_format($components['trends'], 1);
     }
 
     if ($components['anniversary'] > 0) {
         $anniversary = $currentYear - (int) $event['year'];
-        $reasons[] = 'aniversario de ' . $anniversary . ' anos';
+        $reasons[] = 'aniversário de ' . $anniversary . ' anos';
     }
 
     if ($components['category'] > 0) {
@@ -328,21 +328,21 @@ function build_context_summary(array $event, array $reasons): string
 function scoring_setting_definitions(): array
 {
     return [
-        'historical_weight' => ['label' => 'Peso da relevancia historica', 'default' => 0.45],
-        'news_topic_points' => ['label' => 'Pontos por noticia/topico conectado', 'default' => 6.0],
+        'historical_weight' => ['label' => 'Peso da relevância histórica', 'default' => 0.45],
+        'news_topic_points' => ['label' => 'Pontos por notícia/tópico conectado', 'default' => 6.0],
         'news_keyword_points' => ['label' => 'Pontos por palavra-chave conectada', 'default' => 3.0],
-        'news_max' => ['label' => 'Limite maximo de pontos por noticias', 'default' => 32.0],
-        'trend_topic_points' => ['label' => 'Pontos por tendencia conectada', 'default' => 8.0],
-        'trend_keyword_points' => ['label' => 'Pontos por palavra-chave de tendencia', 'default' => 4.0],
-        'trend_max' => ['label' => 'Limite maximo de pontos por tendencias', 'default' => 28.0],
-        'anniversary_major' => ['label' => 'Bonus aniversario maior', 'default' => 18.0],
-        'anniversary_medium' => ['label' => 'Bonus aniversario medio', 'default' => 14.0],
-        'anniversary_minor' => ['label' => 'Bonus aniversario menor', 'default' => 8.0],
-        'anniversary_named' => ['label' => 'Bonus aniversario 10/25/75 anos', 'default' => 10.0],
+        'news_max' => ['label' => 'Limite máximo de pontos por notícias', 'default' => 32.0],
+        'trend_topic_points' => ['label' => 'Pontos por tendência conectada', 'default' => 8.0],
+        'trend_keyword_points' => ['label' => 'Pontos por palavra-chave de tendência', 'default' => 4.0],
+        'trend_max' => ['label' => 'Limite máximo de pontos por tendências', 'default' => 28.0],
+        'anniversary_major' => ['label' => 'Bônus aniversário maior', 'default' => 18.0],
+        'anniversary_medium' => ['label' => 'Bônus aniversário médio', 'default' => 14.0],
+        'anniversary_minor' => ['label' => 'Bônus aniversário menor', 'default' => 8.0],
+        'anniversary_named' => ['label' => 'Bônus aniversário 10/25/75 anos', 'default' => 10.0],
         'category_points' => ['label' => 'Pontos por categoria em pauta', 'default' => 4.0],
-        'category_max' => ['label' => 'Limite maximo da categoria', 'default' => 12.0],
+        'category_max' => ['label' => 'Limite máximo da categoria', 'default' => 12.0],
         'diversity_penalty' => ['label' => 'Penalidade por categoria repetida', 'default' => 4.0],
-        'diversity_max' => ['label' => 'Penalidade maxima de diversidade', 'default' => 8.0],
+        'diversity_max' => ['label' => 'Penalidade máxima de diversidade', 'default' => 8.0],
     ];
 }
 
