@@ -105,6 +105,9 @@ render_page_start('Priorizacoes de eventos', 'priority', 'admin', 'Lista os even
                         <span>Diversidade: <?= h(number_format($components['diversity'], 1)) ?></span>
                     </div>
                     <p class="context"><?= h($item['context_summary']) ?></p>
+                    <div class="actions">
+                        <a class="button button-secondary" href="/admin/event-detail.php?id=<?= h((string) $item['event_id']) ?>">Abrir dossiê editorial</a>
+                    </div>
                 </div>
             </article>
         <?php endforeach; ?>

@@ -205,6 +205,17 @@ function event_rankings(int $eventId): array
     return $stmt->fetchAll();
 }
 
+function latest_event_ranking(int $eventId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM daily_rankings WHERE event_id = ? ORDER BY run_date DESC, score DESC, id DESC LIMIT 1'
+    );
+    $stmt->execute([$eventId]);
+    $ranking = $stmt->fetch();
+
+    return $ranking ?: null;
+}
+
 function event_enrichments(int $eventId): array
 {
     $stmt = db()->prepare(
