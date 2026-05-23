@@ -8,43 +8,8 @@ function import_historical_events_for_today(): int
 
 function import_historical_events_for_day(int $month, int $day): int
 {
-    $config = require __DIR__ . '/config.php';
-    $settings = $config['sources']['wikimedia'] ?? [];
-
-    if (empty($settings['enabled'])) {
-        return 0;
-    }
-
-    $imported = 0;
-    $maxImport = (int) ($settings['max_import'] ?? 30);
-    $languages = $settings['languages'] ?? ['pt', 'en'];
-    $types = $settings['types'] ?? ['selected', 'events'];
-
-    foreach ($languages as $language) {
-        foreach ($types as $type) {
-            $events = fetch_wikimedia_on_this_day($language, $type, $month, $day);
-
-            foreach ($events as $event) {
-                if ($imported >= $maxImport) {
-                    return $imported;
-                }
-
-                if (save_wikimedia_event($event, $month, $day, $language, $type)) {
-                    $imported++;
-                }
-            }
-
-            if ($imported > 0 && $type === 'selected') {
-                break;
-            }
-        }
-
-        if ($imported > 0) {
-            break;
-        }
-    }
-
-    return $imported;
+    $result = collect_historical_events_for_day($month, $day);
+    return (int) $result['imported'];
 }
 
 function fetch_wikimedia_on_this_day(string $language, string $type, int $month, int $day): array
@@ -140,6 +105,18 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
         $sourceUrl,
         $type === 'selected' ? 72.00 : 58.00,
     ]);
+
+    $eventId = (int) db()->lastInsertId();
+    save_event_enrichment($eventId, [
+        'source' => 'Wikipedia / Wikimedia',
+        'role' => 'context',
+        'title' => $title,
+        'description' => $description,
+        'source_url' => $sourceUrl,
+        'external_id' => 'wikimedia-' . $language . '-' . $type . '-' . $month . '-' . $day . '-' . $year,
+        'metadata' => $event,
+    ]);
+    enrich_historical_event($eventId, ['article' => ['value' => $sourceUrl]]);
 
     return true;
 }

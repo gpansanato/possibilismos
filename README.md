@@ -57,15 +57,30 @@ O token deve ser o mesmo configurado em `app/config.php`.
 - Melhorar ranking com API de IA externa.
 - Adicionar aprovacao em lote e historico por data.
 
-## Coleta Inicial
+## Coleta Historica
 
-A rotina diaria importa eventos historicos da API publica Wikimedia "On this day" antes de ranquear.
-Por padrao, o sistema tenta Wikipedia em portugues e depois ingles, usando eventos `selected` e, se necessario, `events`.
+A coleta de eventos historicos fica desacoplada da priorizacao. O fluxo tenta usar Wikidata como fonte estrutural principal para obter identificacao canonica, data, tipo e local. Quando Wikidata nao retorna itens, o sistema usa Wikimedia "On this day" como fallback auxiliar.
+
+Depois da identificacao do evento, o MVP salva enriquecimentos em `event_enrichments`, permitindo anexar contexto, imagens, documentos, acervos e referencias geograficas sem alterar a linha principal do evento.
 
 Fonte tecnica:
 
 ```text
+https://query.wikidata.org/sparql
 https://api.wikimedia.org/feed/v1/wikipedia/{language}/onthisday/{type}/{MM}/{DD}
+```
+
+Conectores preparados:
+
+```text
+Wikidata                 identificacao canonica e estrutura
+Wikipedia / Wikimedia    resumos, descricoes e links
+Wikimedia Commons        imagem associada quando disponivel
+Library of Congress      documentos, fotos e mapas
+Europeana                acervo cultural, exige chave para ativar
+Smithsonian Open Access  acervo museologico, exige chave para ativar
+DPLA / National Archives acervo arquivistico, exige chave para ativar
+OpenHistoricalMap        enriquecimento geografico, exige endpoint configurado
 ```
 
 ## Noticias e Priorizacao

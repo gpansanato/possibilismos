@@ -19,6 +19,7 @@ if (!$event) {
 }
 
 $rankings = event_rankings((int) $event['id']);
+$enrichments = event_enrichments((int) $event['id']);
 $returnTo = '/admin/event-detail.php?id=' . (int) $event['id'];
 
 render_page_start('Detalhes do evento', 'events', 'admin', 'Visualizacao completa do evento historico selecionado.');
@@ -32,6 +33,11 @@ render_page_start('Detalhes do evento', 'events', 'admin', 'Visualizacao complet
     </section>
 
     <section class="panel">
+        <?php if ($event['image_url']): ?>
+            <div class="event-visual">
+                <img src="<?= h($event['image_url']) ?>" alt="">
+            </div>
+        <?php endif; ?>
         <div class="detail-grid">
             <div>
                 <span class="eyebrow">Estado</span>
@@ -57,6 +63,18 @@ render_page_start('Detalhes do evento', 'events', 'admin', 'Visualizacao complet
                 <span class="eyebrow">Criado em</span>
                 <p><?= h($event['created_at']) ?></p>
             </div>
+            <div>
+                <span class="eyebrow">ID canonico</span>
+                <p><?= h($event['canonical_id'] ?: 'Nao informado') ?></p>
+            </div>
+            <div>
+                <span class="eyebrow">Fonte canonica</span>
+                <p><?= h($event['canonical_source'] ?: 'Wikimedia') ?></p>
+            </div>
+            <div>
+                <span class="eyebrow">Enriquecido em</span>
+                <p><?= h($event['enriched_at'] ?: 'Nao enriquecido') ?></p>
+            </div>
         </div>
 
         <hr class="divider">
@@ -75,6 +93,29 @@ render_page_start('Detalhes do evento', 'events', 'admin', 'Visualizacao complet
             <button name="review_status" value="pending" type="submit">Marcar nao avaliado</button>
             <button class="danger" name="review_status" value="rejected" type="submit">Reprovar</button>
         </form>
+    </section>
+
+    <section class="panel">
+        <h1>Enriquecimentos coletados</h1>
+        <?php if (!$enrichments): ?>
+            <p>Nenhum enriquecimento documental, visual ou geografico salvo para este evento.</p>
+        <?php else: ?>
+            <div class="feature-grid">
+                <?php foreach ($enrichments as $item): ?>
+                    <article class="feature-card">
+                        <?php if ($item['image_url']): ?>
+                            <img class="card-image" src="<?= h($item['image_url']) ?>" alt="">
+                        <?php endif; ?>
+                        <span class="badge"><?= h($item['role']) ?></span>
+                        <h3><?= h($item['source']) ?></h3>
+                        <p><strong><?= h($item['title']) ?></strong></p>
+                        <?php if ($item['description']): ?><p><?= h($item['description']) ?></p><?php endif; ?>
+                        <?php if ($item['license_label']): ?><p class="meta"><?= h($item['license_label']) ?></p><?php endif; ?>
+                        <?php if ($item['source_url']): ?><p><a href="<?= h($item['source_url']) ?>" target="_blank" rel="noopener">Abrir fonte</a></p><?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
     </section>
 
     <section class="panel">

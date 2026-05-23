@@ -9,6 +9,7 @@ require_once __DIR__ . '/components.php';
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/events.php';
+require_once __DIR__ . '/historical_sources.php';
 require_once __DIR__ . '/sources.php';
 require_once __DIR__ . '/ranking.php';
 
@@ -20,3 +21,4 @@ if (session_status() === PHP_SESSION_NONE) {
 ensure_event_review_status_schema();
 ensure_scoring_settings_schema();
 ensure_collected_contexts_schema();
+ensure_event_enrichments_schema();

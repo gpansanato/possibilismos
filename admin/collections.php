@@ -14,8 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($action === 'historical_events') {
-            $count = import_historical_events_for_today();
-            $message = $count . ' novos eventos historicos importados.';
+            $result = collect_historical_events_for_day($today['month'], $today['day']);
+            $message = $result['imported'] . ' eventos historicos importados/coletados e ' . $result['enriched'] . ' enriquecimentos salvos.';
         } elseif ($action === 'news') {
             $items = collect_daily_news_topics($today['date']);
             $message = count($items) . ' noticias persistidas/coletadas.';
@@ -48,6 +48,7 @@ $collectionRows = [
         'status' => ($eventCounts['pending'] + $eventCounts['approved'] + $eventCounts['rejected']) > 0 ? 'Concluida' : 'Pendente',
         'count' => $eventCounts['pending'] + $eventCounts['approved'] + $eventCounts['rejected'],
         'detail' => $eventCounts['pending'] . ' nao avaliados, ' . $eventCounts['approved'] . ' aprovados, ' . $eventCounts['rejected'] . ' reprovados',
+        'href' => '/admin/events.php?month=' . $today['month'] . '&day=' . $today['day'],
     ],
     [
         'date' => $today['date'],
@@ -55,6 +56,7 @@ $collectionRows = [
         'status' => $newsCount > 0 ? 'Concluida' : 'Pendente',
         'count' => $newsCount,
         'detail' => 'Itens higienizados em collected_contexts',
+        'href' => '/admin/contexts.php?date=' . $today['date'] . '&type=news',
     ],
     [
         'date' => $today['date'],
@@ -62,6 +64,7 @@ $collectionRows = [
         'status' => $trendCount > 0 ? 'Concluida' : 'Pendente',
         'count' => $trendCount,
         'detail' => 'GDELT, Media Cloud, Wikimedia, Agencia Brasil e Hacker News',
+        'href' => '/admin/contexts.php?date=' . $today['date'] . '&type=trend',
     ],
     [
         'date' => $today['date'],
@@ -69,6 +72,7 @@ $collectionRows = [
         'status' => $topicsCount > 0 ? 'Disponivel' : 'Pendente',
         'count' => $topicsCount,
         'detail' => 'Registros operacionais em current_topics',
+        'href' => '/admin/contexts.php?date=' . $today['date'],
     ],
     [
         'date' => $today['date'],
@@ -76,6 +80,7 @@ $collectionRows = [
         'status' => $rankingCount > 0 ? 'Concluida' : 'Pendente',
         'count' => $rankingCount,
         'detail' => 'Registros salvos em daily_rankings',
+        'href' => '/admin/priority.php?date=' . $today['date'],
     ],
 ];
 
@@ -138,6 +143,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individ
                         <th>Status</th>
                         <th>Registros</th>
                         <th>Detalhe</th>
+                        <th>Acoes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -152,6 +158,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Centraliza coletas individ
                             </td>
                             <td data-label="Registros"><?= h((string) $row['count']) ?></td>
                             <td data-label="Detalhe"><?= h($row['detail']) ?></td>
+                            <td data-label="Acoes"><a class="button button-secondary" href="<?= h($row['href']) ?>">Acessar</a></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

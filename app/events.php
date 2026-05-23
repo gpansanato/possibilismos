@@ -106,6 +106,24 @@ function event_rankings(int $eventId): array
     return $stmt->fetchAll();
 }
 
+function event_enrichments(int $eventId): array
+{
+    $stmt = db()->prepare(
+        'SELECT * FROM event_enrichments WHERE event_id = ? ORDER BY role, source, updated_at DESC'
+    );
+    $stmt->execute([$eventId]);
+
+    return $stmt->fetchAll();
+}
+
+function event_enrichments_count(int $eventId): int
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM event_enrichments WHERE event_id = ?');
+    $stmt->execute([$eventId]);
+
+    return (int) $stmt->fetchColumn();
+}
+
 function current_topics_count_for_date(string $runDate): int
 {
     $stmt = db()->prepare('SELECT COUNT(*) FROM current_topics WHERE run_date = ?');

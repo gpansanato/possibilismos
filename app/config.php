@@ -29,6 +29,45 @@ $config = [
             'max_import' => 30,
             'user_agent' => 'PossibilismosMVP/0.1 (https://panblan.com.br)',
         ],
+        'historical' => [
+            'enabled' => true,
+            'max_import' => 35,
+            'max_enrichments_per_source' => 1,
+            'wikidata' => [
+                'enabled' => true,
+                'endpoint' => 'https://query.wikidata.org/sparql',
+            ],
+            'wikipedia' => [
+                'enabled' => true,
+                'summary_url' => 'https://en.wikipedia.org/api/rest_v1/page/summary/%s',
+            ],
+            'commons' => [
+                'enabled' => true,
+            ],
+            'library_of_congress' => [
+                'enabled' => true,
+                'url' => 'https://www.loc.gov/search/',
+            ],
+            'europeana' => [
+                'enabled' => false,
+                'url' => 'https://api.europeana.eu/record/v2/search.json',
+                'api_key' => '',
+            ],
+            'smithsonian' => [
+                'enabled' => false,
+                'url' => 'https://api.si.edu/openaccess/api/v1.0/search',
+                'api_key' => '',
+            ],
+            'dpla' => [
+                'enabled' => false,
+                'url' => 'https://api.dp.la/v2/items',
+                'api_key' => '',
+            ],
+            'openhistoricalmap' => [
+                'enabled' => false,
+                'url' => '',
+            ],
+        ],
         'news' => [
             'enabled' => true,
             'max_items' => 30,

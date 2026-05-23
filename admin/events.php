@@ -36,12 +36,18 @@ if ($day !== '') {
 }
 
 if ($search !== '') {
-    $where[] = '(title LIKE ? OR description LIKE ? OR category LIKE ? OR region LIKE ?)';
+    $where[] = '(e.title LIKE ? OR e.description LIKE ? OR e.category LIKE ? OR e.region LIKE ? OR e.canonical_id LIKE ? OR e.canonical_source LIKE ?)';
     $term = '%' . $search . '%';
-    array_push($params, $term, $term, $term, $term);
+    array_push($params, $term, $term, $term, $term, $term, $term);
 }
 
-$sql = 'SELECT * FROM events';
+$sql = 'SELECT e.*, COALESCE(en.enrichment_count, 0) AS enrichment_count
+        FROM events e
+        LEFT JOIN (
+            SELECT event_id, COUNT(*) AS enrichment_count
+            FROM event_enrichments
+            GROUP BY event_id
+        ) en ON en.event_id = e.id';
 if ($where) {
     $sql .= ' WHERE ' . implode(' AND ', $where);
 }
@@ -111,6 +117,8 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
                     <th>Ano</th>
                     <th>Evento</th>
                     <th>Categoria</th>
+                    <th>Origem</th>
+                    <th>Enriq.</th>
                     <th>Score</th>
                     <th>Estado</th>
                     <th>Acoes</th>
@@ -126,6 +134,8 @@ if ($_SERVER['QUERY_STRING'] ?? '') {
                             <small><?= h($event['region']) ?></small>
                         </td>
                         <td data-label="Categoria"><?= h($event['category']) ?></td>
+                        <td data-label="Origem"><?= h($event['canonical_source'] ?: 'Wikimedia') ?></td>
+                        <td data-label="Enriq."><?= h((string) $event['enrichment_count']) ?></td>
                         <td data-label="Score"><?= h(number_format((float) $event['base_score'], 1)) ?></td>
                         <td data-label="Estado">
                             <span class="status-badge <?= h(event_review_status_class($event['review_status'])) ?>">

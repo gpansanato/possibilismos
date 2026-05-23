@@ -355,6 +355,31 @@ button:hover,
     font-weight: 900;
 }
 
+.event-visual {
+    margin-bottom: 22px;
+    overflow: hidden;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.48);
+}
+
+.event-visual img,
+.card-image {
+    display: block;
+    width: 100%;
+    object-fit: cover;
+}
+
+.event-visual img {
+    max-height: 360px;
+}
+
+.card-image {
+    height: 150px;
+    margin-bottom: 14px;
+    border-radius: 14px;
+}
+
 .mock-window,
 .dashboard-mockup {
     padding: 18px;

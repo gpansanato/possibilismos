@@ -16,6 +16,24 @@ return [
         'wikimedia' => [
             'user_agent' => 'PossibilismosMVP/0.1 (email-ou-url-de-contato)',
         ],
+        'historical' => [
+            'europeana' => [
+                'enabled' => false,
+                'api_key' => 'INFORME_A_CHAVE_SE_USAR_EUROPEANA',
+            ],
+            'smithsonian' => [
+                'enabled' => false,
+                'api_key' => 'INFORME_A_CHAVE_SE_USAR_SMITHSONIAN',
+            ],
+            'dpla' => [
+                'enabled' => false,
+                'api_key' => 'INFORME_A_CHAVE_SE_USAR_DPLA',
+            ],
+            'openhistoricalmap' => [
+                'enabled' => false,
+                'url' => 'INFORME_ENDPOINT_OHM_SE_USAR',
+            ],
+        ],
         'news' => [
             'enabled' => true,
         ],
