@@ -845,6 +845,15 @@ button:hover,
     margin: 12px 0;
 }
 
+.bulk-toolbar .eyebrow {
+    align-self: center;
+    margin-right: 4px;
+}
+
+.filter-form--events {
+    grid-template-columns: minmax(170px, 0.9fr) minmax(150px, 0.8fr) minmax(170px, 0.9fr) minmax(220px, 1.4fr) auto auto auto;
+}
+
 .date-filter label,
 .bulk-toolbar label {
     min-width: 180px;
@@ -1395,6 +1404,11 @@ pre {
     .bulk-toolbar,
     .date-filter {
         display: block;
+    }
+
+    .bulk-toolbar .eyebrow {
+        display: block;
+        margin-bottom: 10px;
     }
 
     .event {

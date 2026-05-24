@@ -84,12 +84,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'prioritize_events') {
             $result = apply_daily_priority_score($actionDate);
             $message = count($result) . ' eventos priorizados para ' . $actionDate . '.';
-        } elseif ($action === 'bulk_status') {
-            $reviewStatus = $_POST['review_status'] ?? '';
+        } elseif (in_array($action, ['bulk_publish', 'bulk_reject'], true)) {
+            $reviewStatus = $action === 'bulk_publish' ? 'approved' : 'rejected';
             if (!$selectedIds) {
                 $error = 'Selecione ao menos um evento para aplicar a ação.';
-            } elseif (!in_array($reviewStatus, ['approved', 'rejected'], true)) {
-                $error = 'Ação editorial inválida.';
             } else {
                 $stmt = db()->prepare('UPDATE events SET review_status = ?, active = ? WHERE id = ?');
                 foreach ($selectedIds as $eventId) {
@@ -183,40 +181,9 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
     <?php if ($error): ?><section class="empty"><p><?= h($error) ?></p></section><?php endif; ?>
     <?php if ($message): ?><section class="panel"><p><?= h($message) ?></p></section><?php endif; ?>
 
-    <section class="panel admin-toolbar">
-        <form class="date-filter" method="get">
-            <label>Data dos fatos <input type="date" name="date" value="<?= h($date) ?>"></label>
-            <input type="hidden" name="status" value="<?= h($status) ?>">
-            <input type="hidden" name="enrichment" value="<?= h($enrichment) ?>">
-            <input type="hidden" name="q" value="<?= h($search) ?>">
-            <button type="submit">Filtrar data</button>
-            <a class="button button-secondary" href="/admin/events.php">Hoje</a>
-        </form>
-        <form class="actions actions-inline" method="post">
-            <input type="hidden" name="date" value="<?= h($date) ?>">
-            <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
-            <button name="action" value="collect_events" type="submit">Coletar eventos</button>
-            <input type="hidden" name="enrich_scope" value="day">
-            <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer dia</button>
-            <button class="button-secondary" name="action" value="prioritize_events" type="submit">Priorizar</button>
-        </form>
-    </section>
-
-    <section class="section-heading">
-        <div>
-            <p class="eyebrow">
-                <?= count($events) ?> eventos |
-                <?= h((string) $countByStatus['pending']) ?> não publicados |
-                <?= h((string) $countByStatus['approved']) ?> publicados |
-                <?= h((string) $countByStatus['rejected']) ?> reprovados
-            </p>
-            <h2>Base de eventos</h2>
-        </div>
-    </section>
-
     <section class="panel">
-        <form class="filter-form" method="get">
-            <input type="hidden" name="date" value="<?= h($date) ?>">
+        <form class="filter-form filter-form--events" method="get">
+            <label>Data dos fatos <input type="date" name="date" value="<?= h($date) ?>"></label>
             <label>Estado
                 <select name="status">
                     <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>Todos</option>
@@ -234,22 +201,46 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
             </label>
             <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Título, descrição, categoria ou região"></label>
             <button type="submit">Filtrar</button>
+            <a class="button button-secondary" href="/admin/events.php">Hoje</a>
             <a class="button button-secondary" href="/admin/events.php?date=<?= h($date) ?>">Limpar</a>
         </form>
+    </section>
+
+    <section class="panel admin-toolbar">
+        <div>
+            <span class="eyebrow">Operações da data</span>
+            <p>Use a data filtrada para coletar, enriquecer ou abrir a priorização dos eventos.</p>
+        </div>
+        <form class="actions actions-inline" method="post">
+            <input type="hidden" name="date" value="<?= h($date) ?>">
+            <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
+            <button name="action" value="collect_events" type="submit">Coletar eventos</button>
+            <input type="hidden" name="enrich_scope" value="day">
+            <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer dia</button>
+            <a class="button button-secondary" href="/admin/priority.php?date=<?= h($date) ?>">Priorizar eventos</a>
+        </form>
+    </section>
+
+    <section class="section-heading">
+        <div>
+            <p class="eyebrow">
+                <?= count($events) ?> eventos |
+                <?= h((string) $countByStatus['pending']) ?> não publicados |
+                <?= h((string) $countByStatus['approved']) ?> publicados |
+                <?= h((string) $countByStatus['rejected']) ?> reprovados
+            </p>
+            <h2>Base de eventos</h2>
+        </div>
     </section>
 
     <form method="post">
         <input type="hidden" name="date" value="<?= h($date) ?>">
         <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
         <section class="bulk-toolbar">
-            <label>Ação em lote
-                <select name="review_status">
-                    <option value="approved">Publicar selecionados</option>
-                    <option value="rejected">Reprovar selecionados</option>
-                </select>
-            </label>
             <input type="hidden" name="enrich_scope" value="selected">
-            <button name="action" value="bulk_status" type="submit">Aplicar</button>
+            <span class="eyebrow">Ações em lote</span>
+            <button name="action" value="bulk_publish" type="submit">Publicar selecionados</button>
+            <button class="button-secondary" name="action" value="bulk_reject" type="submit">Reprovar selecionados</button>
             <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer selecionados</button>
             <button class="danger" name="action" value="delete_events" type="submit" onclick="return confirm('Excluir definitivamente os eventos selecionados?')">Excluir selecionados</button>
         </section>
@@ -299,8 +290,8 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
                             </td>
                             <td data-label="Ações">
                                 <div class="row-actions actions-inline">
-                                    <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='approved'; this.closest('tr').querySelector('.event-select').checked=true" title="Publicar" type="submit">Publicar</button>
-                                    <button class="icon-button danger" name="action" value="bulk_status" onclick="this.form.review_status.value='rejected'; this.closest('tr').querySelector('.event-select').checked=true" title="Reprovar" type="submit">Reprovar</button>
+                                    <button class="icon-button" name="action" value="bulk_publish" onclick="this.closest('tr').querySelector('.event-select').checked=true" title="Publicar" type="submit">Publicar</button>
+                                    <button class="icon-button danger" name="action" value="bulk_reject" onclick="this.closest('tr').querySelector('.event-select').checked=true" title="Reprovar" type="submit">Reprovar</button>
                                     <button class="icon-button danger" name="action" value="delete_events" onclick="this.closest('tr').querySelector('.event-select').checked=true; return confirm('Excluir definitivamente este evento coletado?')" title="Excluir" type="submit">Excluir</button>
                                 </div>
                             </td>

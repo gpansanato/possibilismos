@@ -5,10 +5,23 @@ require_admin();
 $today = today_key();
 $runDate = $_GET['date'] ?? $today['date'];
 $saved = false;
+$applied = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    update_scoring_settings($_POST['settings'] ?? []);
-    $saved = true;
+    $postedDate = $_POST['date'] ?? $runDate;
+    if (is_string($postedDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $postedDate)) {
+        $runDate = $postedDate;
+    }
+
+    $action = $_POST['action'] ?? 'save_settings';
+    if ($action === 'save_settings') {
+        update_scoring_settings($_POST['settings'] ?? []);
+        $saved = true;
+    } elseif ($action === 'prioritize_events') {
+        update_scoring_settings($_POST['settings'] ?? []);
+        $applied = apply_daily_priority_score($runDate);
+        $saved = true;
+    }
 }
 
 $settings = scoring_settings();
@@ -19,28 +32,36 @@ $newsCount = collected_contexts_count_for_date($runDate, 'news');
 $trendsCount = collected_contexts_count_for_date($runDate, 'trend');
 $currentYear = (int) substr($runDate, 0, 4);
 
-render_page_start('Priorizações de eventos', 'priority', 'admin', 'Lista os eventos históricos priorizados e explica os motivos usados no cálculo.');
+render_page_start('Priorização de eventos', 'priority', 'admin', 'Revise critérios, ajuste parâmetros e aplique a priorização dos eventos históricos.');
 ?>
     <section class="panel">
         <h1>Critérios de priorização</h1>
         <div class="feature-grid feature-grid--three">
             <article class="feature-card"><h3>Relevância histórica</h3><p>Parte do score base do evento já curado.</p></article>
-            <article class="feature-card"><h3>Contexto do dia</h3><p>Relaciona o evento com todas as notícias e tendências higienizadas da data.</p></article>
+            <article class="feature-card"><h3>Contexto do dia</h3><p>Relaciona o evento com notícias e tendências higienizadas da data.</p></article>
             <article class="feature-card"><h3>Marco temporal</h3><p>Aplica bônus quando o aniversário histórico é editorialmente relevante.</p></article>
         </div>
     </section>
 
     <section class="panel">
-        <h1>Ajustes finos</h1>
-        <?php if ($saved): ?><p>Parâmetros atualizados.</p><?php endif; ?>
+        <h1>Executar priorização</h1>
+        <p>Revise os parâmetros e aplique o cálculo para gerar uma fila editorial explicável para a data selecionada.</p>
+        <?php if ($applied !== null): ?><p><?= count($applied) ?> eventos priorizados e salvos para <?= h($runDate) ?>.</p><?php endif; ?>
+        <?php if ($saved && $applied === null): ?><p>Parâmetros atualizados.</p><?php endif; ?>
         <form class="settings-grid" method="post">
+            <label>
+                Data avaliada
+                <input type="date" name="date" value="<?= h($runDate) ?>">
+            </label>
             <?php foreach ($definitions as $key => $definition): ?>
                 <label>
                     <?= h($definition['label']) ?>
                     <input type="number" step="0.01" name="settings[<?= h($key) ?>]" value="<?= h((string) $settings[$key]) ?>">
                 </label>
             <?php endforeach; ?>
-            <button type="submit">Salvar parâmetros</button>
+            <button name="action" value="save_settings" type="submit">Salvar parâmetros</button>
+            <button class="button-secondary" name="action" value="prioritize_events" type="submit">Priorizar eventos agora</button>
+            <a class="button button-secondary" href="/admin/events.php?date=<?= h($runDate) ?>">Voltar para eventos</a>
         </form>
     </section>
 
@@ -62,7 +83,7 @@ render_page_start('Priorizações de eventos', 'priority', 'admin', 'Lista os ev
 
     <?php if (!$rankings): ?>
         <section class="empty">
-            <p>Nenhuma priorização aplicada para esta data. Use a etapa Priorizar eventos.</p>
+            <p>Nenhuma priorização aplicada para esta data. Ajuste os parâmetros acima e use "Priorizar eventos agora".</p>
         </section>
     <?php endif; ?>
 
