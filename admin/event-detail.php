@@ -243,8 +243,7 @@ render_page_start('Dossiê editorial', 'events', 'admin', 'Evento histórico est
             <form class="actions actions-inline" method="post" action="/admin/update-event-status.php">
                 <input type="hidden" name="id" value="<?= h((string) $event['id']) ?>">
                 <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
-                <button name="review_status" value="approved" type="submit">Aprovar evento</button>
-                <button name="review_status" value="pending" type="submit">Marcar como pendente</button>
+                <button name="review_status" value="approved" type="submit">Publicar evento</button>
                 <button class="danger" name="review_status" value="rejected" type="submit">Reprovar evento</button>
             </form>
             <?php if ($ranking): ?>

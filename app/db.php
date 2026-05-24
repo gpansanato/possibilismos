@@ -173,3 +173,106 @@ function ensure_event_enrichments_schema(): void
 
     $checked = true;
 }
+
+function db_column_exists(string $table, string $column): bool
+{
+    $stmt = db()->prepare('SHOW COLUMNS FROM ' . $table . ' LIKE ?');
+    $stmt->execute([$column]);
+
+    return (bool) $stmt->fetch();
+}
+
+function db_index_exists(string $table, string $index): bool
+{
+    $stmt = db()->prepare('SHOW INDEX FROM ' . $table . ' WHERE Key_name = ?');
+    $stmt->execute([$index]);
+
+    return (bool) $stmt->fetch();
+}
+
+function db_add_column_if_missing(string $table, string $column, string $definition): void
+{
+    if (!db_column_exists($table, $column)) {
+        db()->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $definition);
+    }
+}
+
+function db_add_index_if_missing(string $table, string $index, string $definition): void
+{
+    if (!db_index_exists($table, $index)) {
+        db()->exec('ALTER TABLE ' . $table . ' ADD ' . $definition);
+    }
+}
+
+function ensure_event_import_pipeline_schema(): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $pdo = db();
+
+    db_add_column_if_missing('events', 'event_key', 'event_key VARCHAR(190) NULL AFTER id');
+    db_add_column_if_missing('events', 'normalized_title', 'normalized_title VARCHAR(255) NULL AFTER title');
+    db_add_column_if_missing('events', 'confidence_score', 'confidence_score DECIMAL(5,2) NOT NULL DEFAULT 0.00 AFTER base_score');
+    db_add_column_if_missing('events', 'first_seen_at', 'first_seen_at DATETIME NULL AFTER created_at');
+    db_add_column_if_missing('events', 'last_seen_at', 'last_seen_at DATETIME NULL AFTER first_seen_at');
+    db_add_column_if_missing('events', 'updated_at', 'updated_at DATETIME NULL AFTER last_seen_at');
+    db_add_index_if_missing('events', 'idx_events_event_key', 'INDEX idx_events_event_key (event_key)');
+    db_add_index_if_missing('events', 'idx_events_normalized_identity', 'INDEX idx_events_normalized_identity (event_month, event_day, year, normalized_title)');
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS event_imports (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            run_date DATE NOT NULL,
+            source VARCHAR(120) NOT NULL,
+            source_type VARCHAR(80) NOT NULL,
+            source_event_id VARCHAR(190) NOT NULL,
+            source_url VARCHAR(500) NULL,
+            event_month TINYINT UNSIGNED NOT NULL,
+            event_day TINYINT UNSIGNED NOT NULL,
+            event_year INT NOT NULL,
+            raw_title VARCHAR(255) NOT NULL,
+            raw_description TEXT NULL,
+            raw_category VARCHAR(120) NULL,
+            raw_location VARCHAR(190) NULL,
+            raw_language VARCHAR(20) NULL,
+            raw_payload_json MEDIUMTEXT NULL,
+            normalized_key VARCHAR(190) NOT NULL,
+            canonical_event_id INT UNSIGNED NULL,
+            status ENUM("collected", "normalized", "linked", "ignored", "error") NOT NULL DEFAULT "collected",
+            error_message TEXT NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            UNIQUE KEY uniq_event_import_source_id (source, source_event_id),
+            INDEX idx_event_import_source_key (source, normalized_key),
+            INDEX idx_event_imports_run_date (run_date),
+            INDEX idx_event_imports_canonical_event (canonical_event_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS event_sources (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            event_id INT UNSIGNED NOT NULL,
+            source VARCHAR(120) NOT NULL,
+            source_event_id VARCHAR(190) NOT NULL,
+            source_url VARCHAR(500) NULL,
+            source_title VARCHAR(255) NULL,
+            source_description TEXT NULL,
+            source_language VARCHAR(20) NULL,
+            confidence_score DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            UNIQUE KEY uniq_event_source (event_id, source, source_event_id),
+            INDEX idx_event_sources_event (event_id),
+            INDEX idx_event_sources_source_id (source, source_event_id),
+            CONSTRAINT fk_event_sources_event
+                FOREIGN KEY (event_id) REFERENCES events(id)
+                ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+
+    $checked = true;
+}

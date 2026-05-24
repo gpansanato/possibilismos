@@ -11,6 +11,7 @@ $dateParts = date_parts_from_run_date($date);
 
 $eventCounts = events_count_by_review_status($dateParts['month'], $dateParts['day']);
 $historicalSummary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
+$importSummary = event_import_summary_for_date($date);
 $newsCount = collected_contexts_count_for_date($date, 'news');
 $trendCount = collected_contexts_count_for_date($date, 'trend');
 $topicsCount = current_topics_count_for_date($date);
@@ -21,7 +22,15 @@ $collectionRows = [
         'name' => 'Eventos históricos',
         'status' => $historicalSummary['total'] > 0 ? 'Concluída' : 'Pendente',
         'count' => $historicalSummary['total'],
-        'detail' => $eventCounts['pending'] . ' não avaliados, ' . $eventCounts['approved'] . ' aprovados, ' . $eventCounts['rejected'] . ' reprovados',
+        'detail' => $eventCounts['pending'] . ' não publicados, ' . $eventCounts['approved'] . ' publicados, ' . $eventCounts['rejected'] . ' reprovados; ' . $importSummary['linked'] . ' imports vinculados',
+        'href' => '/admin/events.php?date=' . $date,
+    ],
+    [
+        'date' => $date,
+        'name' => 'Normalização de eventos',
+        'status' => $importSummary['total'] > 0 ? 'Concluída' : 'Pendente',
+        'count' => $importSummary['total'],
+        'detail' => $importSummary['linked'] . ' vinculados, ' . $importSummary['ignored'] . ' ignorados, ' . $importSummary['errors'] . ' erros',
         'href' => '/admin/events.php?date=' . $date,
     ],
     [

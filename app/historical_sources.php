@@ -1,6 +1,6 @@
 <?php
 
-function collect_historical_events_for_day(int $month, int $day): array
+function collect_historical_events_for_day(int $month, int $day, ?string $runDate = null): array
 {
     $config = require __DIR__ . '/config.php';
     $settings = $config['sources']['historical'] ?? [];
@@ -14,7 +14,7 @@ function collect_historical_events_for_day(int $month, int $day): array
                 break;
             }
 
-            $eventId = save_wikidata_historical_event($event, $month, $day);
+            $eventId = save_wikidata_historical_event($event, $month, $day, $runDate);
             if ($eventId > 0) {
                 $imported++;
                 $enriched += enrich_historical_event($eventId, $event);
@@ -23,7 +23,7 @@ function collect_historical_events_for_day(int $month, int $day): array
     }
 
     if ($imported === 0) {
-        $imported = import_historical_events_from_wikimedia($month, $day, $maxImport);
+        $imported = import_historical_events_from_wikimedia($month, $day, $maxImport, $runDate);
     }
 
     return [
@@ -62,7 +62,7 @@ LIMIT ' . (int) ($settings['max_import'] ?? 35);
     return $data['results']['bindings'];
 }
 
-function save_wikidata_historical_event(array $row, int $month, int $day): int
+function save_wikidata_historical_event(array $row, int $month, int $day, ?string $runDate = null): int
 {
     $itemUrl = $row['item']['value'] ?? '';
     $wikidataId = wikidata_id_from_url($itemUrl);
@@ -73,17 +73,9 @@ function save_wikidata_historical_event(array $row, int $month, int $day): int
     }
 
     $title = make_event_title($label, $year);
-    $existing = event_id_by_canonical_id($wikidataId);
-    if ($existing > 0) {
-        return $existing;
-    }
-    if (event_exists($month, $day, $year, $title)) {
-        return 0;
-    }
-
-    $description = $label;
     $type = clean_context_text($row['typeLabel']['value'] ?? '');
     $place = clean_context_text($row['placeLabel']['value'] ?? '');
+    $description = $label;
     if ($type !== '') {
         $description .= ' Tipo: ' . $type . '.';
     }
@@ -91,26 +83,54 @@ function save_wikidata_historical_event(array $row, int $month, int $day): int
         $description .= ' Local: ' . $place . '.';
     }
 
-    $stmt = db()->prepare(
-        'INSERT INTO events
-         (event_month, event_day, year, title, description, category, region, source_url, canonical_id, canonical_source, canonical_title, base_score, review_status, active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "Wikidata", ?, ?, "pending", 0, NOW())'
-    );
-    $stmt->execute([
-        $month,
-        $day,
-        $year,
-        $title,
-        $description,
-        infer_event_category($description),
-        $place ?: 'Wikidata',
-        $itemUrl ?: null,
-        $wikidataId,
-        $label,
-        0.00,
-    ]);
+    $event = [
+        'event_month' => $month,
+        'event_day' => $day,
+        'year' => $year,
+        'title' => $title,
+        'description' => $description,
+        'category' => infer_event_category($description),
+        'region' => $place ?: 'Wikidata',
+        'source_url' => $itemUrl ?: null,
+        'canonical_id' => $wikidataId,
+        'canonical_source' => 'Wikidata',
+        'canonical_title' => $label,
+        'base_score' => 0.00,
+        'confidence_score' => 0.95,
+    ];
+    $source = [
+        'source' => 'Wikidata',
+        'source_event_id' => $wikidataId,
+        'source_url' => $itemUrl ?: null,
+        'title' => $label,
+        'description' => trim(($type ? 'Tipo: ' . $type . '. ' : '') . ($place ? 'Local: ' . $place . '.' : '')),
+        'language' => 'mul',
+        'confidence_score' => 0.95,
+    ];
+    $import = [
+        'run_date' => $runDate ?: historical_import_run_date($month, $day),
+        'source' => 'Wikidata',
+        'source_type' => 'historical_event',
+        'source_event_id' => $wikidataId,
+        'source_url' => $itemUrl ?: null,
+        'event_month' => $month,
+        'event_day' => $day,
+        'event_year' => $year,
+        'raw_title' => $label,
+        'raw_description' => $description,
+        'raw_category' => $type,
+        'raw_location' => $place,
+        'raw_language' => 'mul',
+        'raw_payload' => $row,
+        'normalized_key' => build_event_key($event),
+        'status' => 'normalized',
+    ];
 
-    $eventId = (int) db()->lastInsertId();
+    $eventId = persist_normalized_historical_event($event, $source, $import);
+    if ($eventId <= 0) {
+        return 0;
+    }
+
     save_event_enrichment($eventId, [
         'source' => 'Wikidata',
         'role' => 'canonical',
@@ -124,7 +144,7 @@ function save_wikidata_historical_event(array $row, int $month, int $day): int
     return $eventId;
 }
 
-function import_historical_events_from_wikimedia(int $month, int $day, int $maxImport): int
+function import_historical_events_from_wikimedia(int $month, int $day, int $maxImport, ?string $runDate = null): int
 {
     $config = require __DIR__ . '/config.php';
     $settings = $config['sources']['wikimedia'] ?? [];
@@ -141,7 +161,7 @@ function import_historical_events_from_wikimedia(int $month, int $day, int $maxI
                     return $imported;
                 }
 
-                if (save_wikimedia_event($event, $month, $day, $language, $type)) {
+                if (save_wikimedia_event($event, $month, $day, $language, $type, $runDate)) {
                     $imported++;
                 }
             }
@@ -375,10 +395,16 @@ function save_event_enrichment(int $eventId, array $item): void
 
 function event_id_by_canonical_id(string $canonicalId): int
 {
-    $stmt = db()->prepare('SELECT id FROM events WHERE canonical_id = ? LIMIT 1');
+    $stmt = db()->prepare('SELECT id FROM events WHERE canonical_source = "Wikidata" AND canonical_id = ? LIMIT 1');
     $stmt->execute([$canonicalId]);
 
     return (int) ($stmt->fetchColumn() ?: 0);
+}
+
+function historical_import_run_date(int $month, int $day): string
+{
+    $today = today_key();
+    return sprintf('%04d-%02d-%02d', $today['year'], $month, $day);
 }
 
 function wikidata_id_from_url(string $url): string

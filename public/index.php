@@ -25,7 +25,7 @@ render_page_start('Histórico Diário', 'home', 'public', null, false);
                 <?php component_metric('Insumos', '18'); ?>
             </div>
             <?php component_mock_row('Terremoto de Valdivia', 'Prioridade 84.5 - ciência e impacto social', 'Revisar'); ?>
-            <?php component_mock_row('Pacto de Aço', 'Relação com política internacional atual', 'Aprovado'); ?>
+            <?php component_mock_row('Pacto de Aço', 'Relação com política internacional atual', 'Publicado'); ?>
             <?php component_mock_row('Arthur Conan Doyle', 'Gancho cultural para newsletter', 'Pendente'); ?>
             <div class="mock-bars">
                 <span style="width: 84%"></span>
@@ -135,7 +135,7 @@ render_page_start('Histórico Diário', 'home', 'public', null, false);
         </div>
         <div class="feature-grid feature-grid--three">
             <article class="feature-card"><h3>Configurar fontes</h3><p>Use as fontes padrão ou ajuste os sinais de contexto conforme a linha editorial.</p></article>
-            <article class="feature-card"><h3>Revisar pendências</h3><p>Fatos entram como não avaliados para evitar publicação acidental e preservar decisão humana.</p></article>
+            <article class="feature-card"><h3>Revisar pendências</h3><p>Fatos entram como não publicados para evitar publicação acidental e preservar decisão humana.</p></article>
             <article class="feature-card"><h3>Calibrar prioridade</h3><p>Parâmetros permitem ajustar pesos e critérios sem refatorar a aplicação.</p></article>
         </div>
     </section>

@@ -40,6 +40,8 @@ $checks = [
     ['Tabela daily_runs', table_exists('daily_runs')],
     ['Tabela current_topics', table_exists('current_topics')],
     ['Tabela collected_contexts', table_exists('collected_contexts')],
+    ['Tabela event_imports', table_exists('event_imports')],
+    ['Tabela event_sources', table_exists('event_sources')],
     ['Tabela event_enrichments', table_exists('event_enrichments')],
     ['Tabela daily_rankings', table_exists('daily_rankings')],
     ['Tabela scoring_settings', table_exists('scoring_settings')],
@@ -47,12 +49,19 @@ $checks = [
     ['events.active', column_exists('events', 'active')],
     ['events.base_score', column_exists('events', 'base_score')],
     ['events.canonical_id', column_exists('events', 'canonical_id')],
+    ['events.event_key', column_exists('events', 'event_key')],
+    ['events.normalized_title', column_exists('events', 'normalized_title')],
+    ['events.confidence_score', column_exists('events', 'confidence_score')],
     ['events.image_url', column_exists('events', 'image_url')],
     ['daily_rankings.context_summary', column_exists('daily_rankings', 'context_summary')],
     ['collected_contexts.normalized_title', column_exists('collected_contexts', 'normalized_title')],
     ['daily_rankings uniq_daily_rankings_event', index_exists('daily_rankings', 'uniq_daily_rankings_event')],
     ['collected_contexts uniq_collected_context', index_exists('collected_contexts', 'uniq_collected_context')],
     ['event_enrichments uniq_event_enrichment', index_exists('event_enrichments', 'uniq_event_enrichment')],
+    ['event_imports uniq_event_import_source_id', index_exists('event_imports', 'uniq_event_import_source_id')],
+    ['event_imports idx_event_import_source_key', index_exists('event_imports', 'idx_event_import_source_key')],
+    ['event_sources uniq_event_source', index_exists('event_sources', 'uniq_event_source')],
+    ['events idx_events_event_key', index_exists('events', 'idx_events_event_key')],
     ['events idx_events_review_status', index_exists('events', 'idx_events_review_status')],
 ];
 
@@ -111,6 +120,7 @@ render_page_start('Diagnostico do banco', 'db-check', 'admin', 'Verifica se o ba
         <pre><code>sql/migrations/2026_05_22_event_review_status.sql
 sql/migrations/2026_05_22_scoring_settings.sql
 sql/migrations/2026_05_22_collected_contexts.sql
-sql/migrations/2026_05_23_event_enrichments.sql</code></pre>
+sql/migrations/2026_05_23_event_enrichments.sql
+sql/migrations/2026_05_24_event_import_pipeline.sql</code></pre>
     </section>
 <?php render_page_end(); ?>

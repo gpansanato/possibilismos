@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($action === 'collect_events') {
-            $result = collect_historical_events_for_day($parts['month'], $parts['day']);
+            $result = collect_historical_events_for_day($parts['month'], $parts['day'], $actionDate);
             $message = $result['imported'] . ' eventos coletados e ' . $result['enriched'] . ' enriquecimentos salvos.';
             $month = (string) $parts['month'];
             $day = (string) $parts['day'];
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reviewStatus = $_POST['review_status'] ?? '';
             if (!$selectedIds) {
                 $error = 'Selecione ao menos um evento para aplicar a ação.';
-            } elseif (!in_array($reviewStatus, ['pending', 'approved', 'rejected'], true)) {
+            } elseif (!in_array($reviewStatus, ['approved', 'rejected'], true)) {
                 $error = 'Ação editorial inválida.';
             } else {
                 $stmt = db()->prepare('UPDATE events SET review_status = ?, active = ? WHERE id = ?');
@@ -96,6 +96,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([$reviewStatus, event_active_from_review_status($reviewStatus), $eventId]);
                 }
                 $message = count($selectedIds) . ' eventos atualizados.';
+            }
+        } elseif ($action === 'delete_events') {
+            if (!$selectedIds) {
+                $error = 'Selecione ao menos um evento para excluir.';
+            } else {
+                $unlinkImports = db()->prepare('UPDATE event_imports SET canonical_event_id = NULL, status = "ignored", updated_at = NOW() WHERE canonical_event_id = ?');
+                $stmt = db()->prepare('DELETE FROM events WHERE id = ?');
+                foreach ($selectedIds as $eventId) {
+                    $unlinkImports->execute([$eventId]);
+                    $stmt->execute([$eventId]);
+                }
+                $message = count($selectedIds) . ' eventos excluídos.';
             }
         }
     } catch (Throwable $e) {
@@ -194,8 +206,8 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
         <div>
             <p class="eyebrow">
                 <?= count($events) ?> eventos |
-                <?= h((string) $countByStatus['pending']) ?> não avaliados |
-                <?= h((string) $countByStatus['approved']) ?> aprovados |
+                <?= h((string) $countByStatus['pending']) ?> não publicados |
+                <?= h((string) $countByStatus['approved']) ?> publicados |
                 <?= h((string) $countByStatus['rejected']) ?> reprovados
             </p>
             <h2>Base de eventos</h2>
@@ -208,8 +220,8 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
             <label>Estado
                 <select name="status">
                     <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>Todos</option>
-                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Não avaliados</option>
-                    <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>Aprovados</option>
+                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Não publicados</option>
+                    <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>Publicados</option>
                     <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>Reprovados</option>
                 </select>
             </label>
@@ -232,14 +244,14 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
         <section class="bulk-toolbar">
             <label>Ação em lote
                 <select name="review_status">
-                    <option value="approved">Aprovar selecionados</option>
-                    <option value="pending">Marcar pendente</option>
+                    <option value="approved">Publicar selecionados</option>
                     <option value="rejected">Reprovar selecionados</option>
                 </select>
             </label>
             <input type="hidden" name="enrich_scope" value="selected">
             <button name="action" value="bulk_status" type="submit">Aplicar</button>
             <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer selecionados</button>
+            <button class="danger" name="action" value="delete_events" type="submit" onclick="return confirm('Excluir definitivamente os eventos selecionados?')">Excluir selecionados</button>
         </section>
 
         <section class="table-wrap">
@@ -283,9 +295,9 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
                                 </span>
                             </td>
                             <td data-label="Ações">
-                                <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='approved'; this.closest('tr').querySelector('.event-select').checked=true" title="Aprovar" type="submit">Aprovar</button>
-                                <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='pending'; this.closest('tr').querySelector('.event-select').checked=true" title="Pendente" type="submit">Pendente</button>
+                                <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='approved'; this.closest('tr').querySelector('.event-select').checked=true" title="Publicar" type="submit">Publicar</button>
                                 <button class="icon-button danger" name="action" value="bulk_status" onclick="this.form.review_status.value='rejected'; this.closest('tr').querySelector('.event-select').checked=true" title="Reprovar" type="submit">Reprovar</button>
+                                <button class="icon-button danger" name="action" value="delete_events" onclick="this.closest('tr').querySelector('.event-select').checked=true; return confirm('Excluir definitivamente este evento coletado?')" title="Excluir" type="submit">Excluir</button>
                             </td>
                         </tr>
                     <?php endforeach; ?>

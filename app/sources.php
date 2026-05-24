@@ -3,12 +3,12 @@
 function import_historical_events_for_today(): int
 {
     $today = today_key();
-    return import_historical_events_for_day($today['month'], $today['day']);
+    return import_historical_events_for_day($today['month'], $today['day'], $today['date']);
 }
 
-function import_historical_events_for_day(int $month, int $day): int
+function import_historical_events_for_day(int $month, int $day, ?string $runDate = null): int
 {
-    $result = collect_historical_events_for_day($month, $day);
+    $result = collect_historical_events_for_day($month, $day, $runDate);
     return (int) $result['imported'];
 }
 
@@ -73,7 +73,7 @@ function http_get_json(string $url, string $userAgent, array $headers = []): ?st
     return is_string($body) ? $body : null;
 }
 
-function save_wikimedia_event(array $event, int $month, int $day, string $language, string $type): bool
+function save_wikimedia_event(array $event, int $month, int $day, string $language, string $type, ?string $runDate = null): bool
 {
     if (empty($event['text']) || !isset($event['year'])) {
         return false;
@@ -83,37 +83,70 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
     $description = trim(strip_tags((string) $event['text']));
     $title = make_event_title($description, $year);
     $sourceUrl = wikimedia_event_url($event);
+    $pageTitle = (string) ($event['pages'][0]['title'] ?? '');
+    $sourceEventId = mb_substr(
+        'wikimedia-' . $language . '-' . $type . '-' . $month . '-' . $day . '-' . $year . '-' . normalize_context_key($pageTitle ?: $description),
+        0,
+        190,
+        'UTF-8'
+    );
+    $region = infer_event_region($event, $language);
+    $category = infer_event_category($description);
+    $eventData = [
+        'event_month' => $month,
+        'event_day' => $day,
+        'year' => $year,
+        'title' => $title,
+        'description' => $description,
+        'category' => $category,
+        'region' => $region,
+        'source_url' => $sourceUrl,
+        'canonical_id' => null,
+        'canonical_source' => null,
+        'canonical_title' => null,
+        'base_score' => 0.00,
+        'confidence_score' => 0.65,
+    ];
+    $source = [
+        'source' => 'Wikipedia / Wikimedia',
+        'source_event_id' => $sourceEventId,
+        'source_url' => $sourceUrl,
+        'title' => $title,
+        'description' => $description,
+        'language' => $language,
+        'confidence_score' => 0.65,
+    ];
+    $import = [
+        'run_date' => $runDate ?: historical_import_run_date($month, $day),
+        'source' => 'Wikipedia / Wikimedia',
+        'source_type' => $type,
+        'source_event_id' => $sourceEventId,
+        'source_url' => $sourceUrl,
+        'event_month' => $month,
+        'event_day' => $day,
+        'event_year' => $year,
+        'raw_title' => $title,
+        'raw_description' => $description,
+        'raw_category' => $category,
+        'raw_location' => $region,
+        'raw_language' => $language,
+        'raw_payload' => $event,
+        'normalized_key' => build_event_key($eventData),
+        'status' => 'normalized',
+    ];
 
-    if (event_exists($month, $day, $year, $title)) {
+    $eventId = persist_normalized_historical_event($eventData, $source, $import);
+    if ($eventId <= 0) {
         return false;
     }
 
-    $stmt = db()->prepare(
-        'INSERT INTO events
-         (event_month, event_day, year, title, description, category, region, source_url, base_score, review_status, active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", 0, NOW())'
-    );
-
-    $stmt->execute([
-        $month,
-        $day,
-        $year,
-        $title,
-        $description,
-        infer_event_category($description),
-        infer_event_region($event, $language),
-        $sourceUrl,
-        0.00,
-    ]);
-
-    $eventId = (int) db()->lastInsertId();
     save_event_enrichment($eventId, [
         'source' => 'Wikipedia / Wikimedia',
         'role' => 'context',
         'title' => $title,
         'description' => $description,
         'source_url' => $sourceUrl,
-        'external_id' => 'wikimedia-' . $language . '-' . $type . '-' . $month . '-' . $day . '-' . $year,
+        'external_id' => $sourceEventId,
         'metadata' => $event,
     ]);
     enrich_historical_event($eventId, ['article' => ['value' => $sourceUrl]]);
