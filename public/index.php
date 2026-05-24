@@ -10,7 +10,7 @@ render_page_start('Histórico Diário', 'home', 'public', null, false);
             <p>Identifique fatos relevantes para o contexto do dia, entenda por que eles importam agora e gere material de apoio para pautas, newsletters, posts e roteiros.</p>
             <div class="hero__actions">
                 <a class="button button-primary" href="/eventos.php">Ver publicações</a>
-                <a class="button button-secondary" href="/admin/login.php">Acessar operação</a>
+                <a class="button button-secondary" href="/admin/login.php">Área administrativa</a>
             </div>
         </div>
 

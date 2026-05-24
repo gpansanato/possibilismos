@@ -27,9 +27,11 @@ $filterOptions = published_ranking_filter_options($date);
 $items = published_rankings_search($date, $category, $region, $search, $sort);
 
 $dateLabel = $selectedDate->format('d/m/Y');
-$publishedLabel = count($items) === 1 ? '1 insumo editorial publicado' : count($items) . ' insumos editoriais publicados';
+$publishedLabel = count($items) === 1
+    ? '1 evento publicado em ' . $dateLabel
+    : count($items) . ' eventos publicados em ' . $dateLabel;
 
-render_page_start('Eventos históricos publicados', 'events', 'public', 'Consulte os fatos priorizados, aprovados e preparados para publicação editorial.', true);
+render_page_start('Eventos históricos destacados', 'events', 'public', 'Fatos aprovados pela curadoria, com contexto, fontes e justificativa editorial.', true);
 ?>
     <section class="public-events-layout">
         <aside class="calendar-panel" aria-label="Calendário de publicações">
@@ -42,7 +44,7 @@ render_page_start('Eventos históricos publicados', 'events', 'public', 'Consult
                 <a class="button button-secondary" href="/eventos.php?date=<?= h($nextMonthDate) ?>">Próximo</a>
             </div>
             <div class="calendar-grid" role="grid">
-                <?php foreach (['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'] as $weekday): ?>
+                <?php foreach (['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as $weekday): ?>
                     <span class="calendar-weekday"><?= h($weekday) ?></span>
                 <?php endforeach; ?>
                 <?php for ($i = 0; $i < $calendarOffset; $i++): ?>
@@ -69,89 +71,90 @@ render_page_start('Eventos históricos publicados', 'events', 'public', 'Consult
                     </a>
                 <?php endfor; ?>
             </div>
-            <p class="calendar-note">Os números indicam quantos fatos foram priorizados, aprovados e publicados em cada data.</p>
+            <p class="calendar-note">Cada número indica quantos eventos foram aprovados e publicados naquela data.</p>
         </aside>
 
         <section class="published-events">
-            <div class="section-heading">
+            <div class="section-heading section-heading--compact">
                 <div>
                     <?php component_badge($dateLabel); ?>
                     <h2><?= h($publishedLabel) ?></h2>
-                    <p>Visualização pública dos fatos aprovados pela curadoria, com prioridade, fonte e motivo editorial.</p>
+                    <p>Use os filtros para encontrar fatos publicados por data, categoria, entidade, região ou prioridade editorial.</p>
                 </div>
                 <a class="button button-secondary" href="/eventos.php">Hoje</a>
             </div>
 
-            <form class="filter-form public-filter" method="get">
+            <form class="filter-form public-filter" method="get" aria-label="Filtros de eventos publicados">
                 <label>Data <input type="date" name="date" value="<?= h($date) ?>"></label>
                 <label>Categoria
                     <select name="category">
                         <option value="">Todas</option>
                         <?php foreach ($filterOptions['categories'] as $option): ?>
-                            <option value="<?= h($option) ?>" <?= $category === $option ? 'selected' : '' ?>><?= h($option) ?></option>
+                            <option value="<?= h($option) ?>" <?= $category === $option ? 'selected' : '' ?>><?= h(public_display_label($option)) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </label>
-                <label>Região
+                <label>Região ou entidade
                     <select name="region">
                         <option value="">Todas</option>
                         <?php foreach ($filterOptions['regions'] as $option): ?>
-                            <option value="<?= h($option) ?>" <?= $region === $option ? 'selected' : '' ?>><?= h($option) ?></option>
+                            <option value="<?= h($option) ?>" <?= $region === $option ? 'selected' : '' ?>><?= h(public_display_label($option)) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </label>
                 <label>Ordenar
                     <select name="sort">
-                        <option value="score_desc" <?= $sort === 'score_desc' ? 'selected' : '' ?>>Prioridade</option>
+                        <option value="score_desc" <?= $sort === 'score_desc' ? 'selected' : '' ?>>Prioridade editorial</option>
                         <option value="year_asc" <?= $sort === 'year_asc' ? 'selected' : '' ?>>Ano crescente</option>
                         <option value="year_desc" <?= $sort === 'year_desc' ? 'selected' : '' ?>>Ano decrescente</option>
                         <option value="title_asc" <?= $sort === 'title_asc' ? 'selected' : '' ?>>Título</option>
                     </select>
                 </label>
-                <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Evento, contexto ou motivo"></label>
+                <label>Busca <input name="q" value="<?= h($search) ?>" placeholder="Evento, tema ou motivo"></label>
                 <button type="submit">Aplicar</button>
                 <a class="button button-secondary" href="/eventos.php?date=<?= h($date) ?>">Limpar</a>
             </form>
 
             <?php if (!$items): ?>
                 <section class="empty">
-                    <h2>Nenhum fato publicado para esta data.</h2>
+                    <h2>Nenhum evento publicado para esta data.</h2>
                     <p>Use o calendário para navegar por outras datas ou acompanhe a próxima rodada de publicação editorial.</p>
                 </section>
             <?php endif; ?>
 
-            <section class="published-list">
+            <section class="published-list" aria-label="Lista de eventos publicados">
                 <?php foreach ($items as $item): ?>
+                    <?php
+                    $contextCount = substr_count((string) $item['reasons'], 'conexão com');
+                    $priorityLabel = public_priority_label((float) $item['score']);
+                    $editorialReason = public_editorial_reason($item, $contextCount);
+                    ?>
                     <article class="published-card">
                         <?php if ($item['image_url']): ?>
-                            <a href="/evento.php?id=<?= h((string) $item['id']) ?>" aria-label="Abrir dossiê de <?= h($item['title']) ?>">
+                            <a class="published-card__media" href="/evento.php?id=<?= h((string) $item['id']) ?>" aria-label="Abrir dossiê de <?= h($item['title']) ?>">
                                 <img class="published-card__image" src="<?= h($item['image_url']) ?>" alt="">
                             </a>
                         <?php endif; ?>
                         <div class="published-card__body">
                             <div class="published-card__top">
-                                <span class="year"><?= h($item['year']) ?></span>
-                                <span class="status-badge is-approved">Prioridade <?= h(number_format((float) $item['score'], 1)) ?></span>
+                                <span class="year"><?= h((string) $item['year']) ?></span>
+                                <span class="status-badge is-approved">Prioridade <?= h($priorityLabel) ?></span>
                             </div>
                             <h3><a class="table-title" href="/evento.php?id=<?= h((string) $item['id']) ?>"><?= h($item['title']) ?></a></h3>
-                            <p><?= h($item['description']) ?></p>
-                            <p class="context"><?= h($item['context_summary']) ?></p>
+                            <p class="published-card__summary"><?= h($item['description'] ?: 'Resumo editorial em validação.') ?></p>
+                            <p class="published-card__reason"><?= h($editorialReason) ?></p>
                             <div class="meta">
-                                <span><?= h($item['category']) ?></span>
-                                <span><?= h($item['region']) ?></span>
+                                <span><?= h(public_display_label($item['category'])) ?></span>
+                                <?php if (trim((string) $item['region']) !== ''): ?><span><?= h(public_display_label($item['region'])) ?></span><?php endif; ?>
                                 <span><?= h((string) $item['enrichment_count']) ?> enriquecimentos</span>
                                 <?php if ($item['canonical_source']): ?><span><?= h($item['canonical_source']) ?></span><?php endif; ?>
                             </div>
-                            <?php if ($item['reasons']): ?>
-                                <details class="reason-box">
-                                    <summary>Motivo da priorização</summary>
-                                    <p><?= h($item['reasons']) ?></p>
-                                </details>
-                            <?php endif; ?>
-                            <?php if ($item['source_url']): ?>
-                                <a class="source" href="<?= h($item['source_url']) ?>" target="_blank" rel="noopener">Abrir fonte original</a>
-                            <?php endif; ?>
-                            <p><a class="button button-secondary" href="/evento.php?id=<?= h((string) $item['id']) ?>">Abrir dossiê</a></p>
+                            <div class="published-card__actions">
+                                <a class="button button-primary" href="/evento.php?id=<?= h((string) $item['id']) ?>">Abrir dossiê</a>
+                                <?php if ($item['source_url']): ?>
+                                    <a class="button button-secondary" href="<?= h($item['source_url']) ?>" target="_blank" rel="noopener">Fonte</a>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </article>
                 <?php endforeach; ?>

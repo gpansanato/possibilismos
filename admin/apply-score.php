@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-render_page_start('Priorizacao de eventos historicos', 'apply-score', 'admin', 'Relaciona todos os eventos historicos aprovados do dia avaliado com todas as noticias e tendencias da base de contexto.');
+render_page_start('Priorização de eventos históricos', 'apply-score', 'admin', 'Relaciona todos os eventos históricos aprovados do dia avaliado com todas as notícias e tendências da base de contexto.');
 ?>
     <section class="panel">
         <h1>Executar priorizacao</h1>

@@ -322,7 +322,7 @@ function build_score_reasons(array $event, array $components, int $currentYear):
 
 function build_context_summary(array $event, array $reasons): string
 {
-    return 'Priorizacao calculada por: ' . implode('; ', $reasons) . '.';
+    return 'Priorização calculada por: ' . implode('; ', $reasons) . '.';
 }
 
 function scoring_setting_definitions(): array

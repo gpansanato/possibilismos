@@ -30,32 +30,35 @@ $enrichments = event_enrichments((int) $item['event_id']);
 $historicalSources = array_values(array_filter($enrichments, static fn($source) => in_array($source['role'], ['canonical', 'context', 'document', 'visual', 'archive', 'museum', 'cultural', 'geographic'], true)));
 $matchedContexts = public_dossier_contexts($event, (string) $item['run_date']);
 $priorityLabel = public_priority_label((float) $item['score']);
-$reasonList = array_values(array_filter(array_map('trim', explode(';', (string) $item['reasons']))));
 $dateLabel = str_pad((string) $item['event_day'], 2, '0', STR_PAD_LEFT) . '/' . str_pad((string) $item['event_month'], 2, '0', STR_PAD_LEFT);
+$editorialReason = public_editorial_reason($item, count($matchedContexts));
 $suggestedAngle = 'Este evento pode ser lido hoje a partir das conexões editoriais identificadas na priorização, sempre como hipótese de pauta e não como relação causal automática.';
 
-render_page_start($item['title'], 'events', 'public', 'Dossiê editorial público do evento histórico priorizado.');
+render_page_start('Dossiê editorial', 'events', 'public', null, false);
 ?>
-    <section class="public-dossier">
-        <div class="section-heading">
+    <article class="public-dossier">
+        <header class="dossier-header">
             <div>
                 <?php component_badge('Dossiê editorial público'); ?>
-                <h2><?= h($item['title']) ?></h2>
-                <p><?= h($dateLabel) ?> | <?= h((string) $item['year']) ?></p>
+                <h1><?= h($item['title']) ?></h1>
+                <p><?= h($dateLabel) ?> · <?= h((string) $item['year']) ?> · <?= h(public_display_label($item['category'], 'Categoria em validação')) ?></p>
             </div>
-            <a class="button button-secondary" href="/eventos.php?date=<?= h($item['run_date']) ?>">Voltar para publicações</a>
-        </div>
+            <div class="dossier-header__actions">
+                <span class="status-badge is-approved">Prioridade <?= h($priorityLabel) ?></span>
+                <a class="button button-secondary" href="/eventos.php?date=<?= h($item['run_date']) ?>">Voltar para publicações</a>
+            </div>
+        </header>
 
         <section class="panel dossier-hero">
             <?php if ($item['image_url']): ?>
-                <div class="event-visual">
+                <div class="event-visual event-visual--dossier">
                     <img src="<?= h($item['image_url']) ?>" alt="">
                 </div>
             <?php endif; ?>
-            <div class="detail-grid">
+            <div class="detail-grid detail-grid--dossier">
                 <div><span class="eyebrow">Prioridade editorial</span><p><?= h($priorityLabel) ?></p></div>
-                <div><span class="eyebrow">Categoria</span><p><?= h($item['category'] ?: 'Não informada') ?></p></div>
-                <div><span class="eyebrow">Região</span><p><?= h($item['region'] ?: 'Não informada') ?></p></div>
+                <div><span class="eyebrow">Categoria</span><p><?= h(public_display_label($item['category'], 'Não informada')) ?></p></div>
+                <div><span class="eyebrow">Região ou entidade</span><p><?= h(public_display_label($item['region'], 'Não informada')) ?></p></div>
                 <div><span class="eyebrow">Data histórica</span><p><?= h($dateLabel) ?></p></div>
                 <div><span class="eyebrow">Ano</span><p><?= h((string) $item['year']) ?></p></div>
                 <div><span class="eyebrow">Fonte inicial</span><p><?= h($item['canonical_source'] ?: 'Em validação') ?></p></div>
@@ -65,13 +68,13 @@ render_page_start($item['title'], 'events', 'public', 'Dossiê editorial públic
         <section class="dossier-grid">
             <article class="panel dossier-block">
                 <span class="badge">Resumo do fato</span>
-                <h1>O que aconteceu</h1>
+                <h2>O que aconteceu</h2>
                 <p><?= h($item['description'] ?: 'Resumo editorial em validação.') ?></p>
             </article>
 
             <article class="panel dossier-block">
                 <span class="badge">Contexto histórico</span>
-                <h1>Por que é relevante</h1>
+                <h2>Por que é relevante</h2>
                 <?php if ($historicalSources): ?>
                     <p><?= h(public_historical_context_summary($item, $historicalSources)) ?></p>
                 <?php else: ?>
@@ -80,24 +83,17 @@ render_page_start($item['title'], 'events', 'public', 'Dossiê editorial públic
             </article>
         </section>
 
-        <section class="panel dossier-block">
+        <section class="panel dossier-block dossier-block--highlight">
             <span class="badge">Destaque editorial</span>
-            <h1>Por que este evento foi destacado</h1>
-            <p><?= h($item['context_summary'] ?: 'Este evento foi selecionado pela combinação de relevância histórica, data e contexto editorial disponível.') ?></p>
-            <?php if ($reasonList): ?>
-                <ul class="clean-list">
-                    <?php foreach (array_slice($reasonList, 0, 4) as $reason): ?>
-                        <li><?= h($reason) ?></li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-            <p class="meta">As conexões abaixo são apoio editorial para leitura do dia. Elas não indicam causalidade automática entre o fato histórico e os temas atuais.</p>
+            <h2>Por que este evento foi destacado</h2>
+            <p><?= h($editorialReason) ?></p>
+            <p class="meta">As conexões são apoio editorial para leitura do dia. Elas não indicam causalidade automática entre o fato histórico e os temas atuais.</p>
         </section>
 
         <section class="dossier-grid">
             <article class="panel dossier-block">
                 <span class="badge">Conexões com o dia</span>
-                <h1>Temas associados</h1>
+                <h2>Temas associados</h2>
                 <?php if (!$matchedContexts): ?>
                     <p>Sem fonte contextual pública vinculada por termo nesta priorização.</p>
                 <?php else: ?>
@@ -105,7 +101,9 @@ render_page_start($item['title'], 'events', 'public', 'Dossiê editorial públic
                         <article class="source-item">
                             <strong><?= h($context['context_type'] === 'news' ? 'Notícia' : 'Tendência') ?></strong>
                             <p><?= h($context['title']) ?></p>
-                            <p><?= h($context['keywords']) ?></p>
+                            <?php if (trim((string) $context['keywords']) !== ''): ?>
+                                <p class="meta"><?= h($context['keywords']) ?></p>
+                            <?php endif; ?>
                         </article>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -113,10 +111,10 @@ render_page_start($item['title'], 'events', 'public', 'Dossiê editorial públic
 
             <article class="panel dossier-block">
                 <span class="badge">Leitura sugerida</span>
-                <h1>Como usar este fato</h1>
+                <h2>Como usar este fato</h2>
                 <p><?= h($suggestedAngle) ?></p>
                 <div class="meta">
-                    <?php foreach (array_filter([$item['category'], $item['region'], $priorityLabel]) as $tag): ?>
+                    <?php foreach (array_filter([public_display_label($item['category']), public_display_label($item['region'], ''), 'Prioridade ' . $priorityLabel]) as $tag): ?>
                         <span><?= h($tag) ?></span>
                     <?php endforeach; ?>
                 </div>
@@ -125,10 +123,10 @@ render_page_start($item['title'], 'events', 'public', 'Dossiê editorial públic
 
         <section class="panel dossier-block">
             <span class="badge">Fontes</span>
-            <h1>Rastreabilidade pública</h1>
+            <h2>Rastreabilidade pública</h2>
             <div class="source-columns">
                 <div>
-                    <h2>Fontes históricas</h2>
+                    <h3>Fontes históricas</h3>
                     <?php if (!$historicalSources && !$item['source_url']): ?>
                         <p>Fonte em validação.</p>
                     <?php endif; ?>
@@ -148,7 +146,7 @@ render_page_start($item['title'], 'events', 'public', 'Dossiê editorial públic
                     <?php endforeach; ?>
                 </div>
                 <div>
-                    <h2>Fontes contextuais</h2>
+                    <h3>Fontes contextuais</h3>
                     <?php if (!$matchedContexts): ?>
                         <p>Sem fonte contextual pública vinculada.</p>
                     <?php else: ?>
@@ -163,22 +161,10 @@ render_page_start($item['title'], 'events', 'public', 'Dossiê editorial públic
                 </div>
             </div>
         </section>
-    </section>
+    </article>
 <?php render_page_end(); ?>
 
 <?php
-function public_priority_label(float $score): string
-{
-    if ($score >= 75) {
-        return 'Alta';
-    }
-    if ($score >= 45) {
-        return 'Média';
-    }
-
-    return 'Baixa';
-}
-
 function public_dossier_contexts(array $event, string $runDate): array
 {
     $eventText = normalize_score_text($event['title'] . ' ' . $event['description'] . ' ' . $event['category'] . ' ' . $event['region']);
@@ -200,5 +186,7 @@ function public_dossier_contexts(array $event, string $runDate): array
 function public_historical_context_summary(array $item, array $sources): string
 {
     $sourceNames = array_values(array_unique(array_map(static fn($source) => $source['source'], $sources)));
-    return 'O fato pertence à categoria ' . ($item['category'] ?: 'histórica') . ' e possui apoio de ' . count($sources) . ' registro(s) de enriquecimento, incluindo ' . implode(', ', array_slice($sourceNames, 0, 3)) . '.';
+    $category = public_display_label($item['category'] ?? null, 'histórica');
+
+    return 'O fato pertence à categoria ' . mb_strtolower($category, 'UTF-8') . ' e possui apoio de ' . count($sources) . ' registro(s) de enriquecimento, incluindo ' . implode(', ', array_slice($sourceNames, 0, 3)) . '.';
 }
