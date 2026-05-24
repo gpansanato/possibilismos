@@ -861,6 +861,7 @@ button:hover,
 
 .icon-button {
     width: auto;
+    white-space: nowrap;
 }
 
 .table-sort {
@@ -1015,9 +1016,20 @@ button:hover,
 
 .filter-form {
     display: grid;
-    grid-template-columns: 160px 100px 100px 160px minmax(220px, 1fr) auto auto;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     align-items: end;
     gap: 12px;
+}
+
+.filter-form button,
+.filter-form .button {
+    align-self: end;
+    white-space: nowrap;
+}
+
+.filter-form input,
+.filter-form select {
+    min-width: 0;
 }
 
 .table-wrap {
@@ -1035,13 +1047,13 @@ button:hover,
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 920px;
+    min-width: 1040px;
 }
 
 .data-table th,
 .data-table td {
     border-bottom: 1px solid var(--color-border-subtle);
-    padding: 14px;
+    padding: 12px 10px;
     text-align: left;
     vertical-align: middle;
 }
@@ -1079,10 +1091,20 @@ button:hover,
     color: var(--color-text-muted);
 }
 
+.data-table td small {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-text-muted);
+}
+
 .row-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 7px;
+}
+
+.data-table td[data-label="Ações"] {
+    white-space: nowrap;
 }
 
 .row-actions .button,

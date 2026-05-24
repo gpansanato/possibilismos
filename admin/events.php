@@ -259,8 +259,7 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
                 <thead>
                     <tr>
                         <th><input type="checkbox" aria-label="Selecionar todos" onclick="document.querySelectorAll('.event-select').forEach(cb => cb.checked = this.checked)"></th>
-                        <th><?= sort_link('Data', 'date_asc', 'date_desc', $sort) ?></th>
-                        <th><?= sort_link('Ano', 'year_asc', 'year_desc', $sort) ?></th>
+                        <th><?= sort_link('Data/Ano', 'date_asc', 'date_desc', $sort) ?></th>
                         <th><?= sort_link('Evento', 'title_asc', 'title_desc', $sort) ?></th>
                         <th><?= sort_link('Categoria', 'category_asc', 'category_asc', $sort) ?></th>
                         <th><?= sort_link('Origem', 'source_asc', 'source_asc', $sort) ?></th>
@@ -274,11 +273,15 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
                     <?php foreach ($events as $event): ?>
                         <tr>
                             <td data-label="Sel."><input class="event-select" type="checkbox" name="selected_ids[]" value="<?= h((string) $event['id']) ?>"></td>
-                            <td data-label="Data"><?= h(str_pad((string) $event['event_day'], 2, '0', STR_PAD_LEFT)) ?>/<?= h(str_pad((string) $event['event_month'], 2, '0', STR_PAD_LEFT)) ?></td>
-                            <td data-label="Ano"><?= h($event['year']) ?></td>
+                            <td data-label="Data/Ano">
+                                <strong><?= h(str_pad((string) $event['event_day'], 2, '0', STR_PAD_LEFT)) ?>/<?= h(str_pad((string) $event['event_month'], 2, '0', STR_PAD_LEFT)) ?></strong>
+                                <small><?= h(format_event_year((int) $event['year'])) ?></small>
+                            </td>
                             <td data-label="Evento">
                                 <a class="table-title" href="/admin/event-detail.php?id=<?= h((string) $event['id']) ?>"><?= h($event['title']) ?></a>
-                                <small><?= h($event['region']) ?></small>
+                                <?php if ($event['region'] && $event['region'] !== ($event['canonical_source'] ?: 'Wikimedia')): ?>
+                                    <small><?= h($event['region']) ?></small>
+                                <?php endif; ?>
                             </td>
                             <td data-label="Categoria"><?= h($event['category']) ?></td>
                             <td data-label="Origem"><?= h($event['canonical_source'] ?: 'Wikimedia') ?></td>
@@ -295,9 +298,11 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
                                 </span>
                             </td>
                             <td data-label="Ações">
-                                <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='approved'; this.closest('tr').querySelector('.event-select').checked=true" title="Publicar" type="submit">Publicar</button>
-                                <button class="icon-button danger" name="action" value="bulk_status" onclick="this.form.review_status.value='rejected'; this.closest('tr').querySelector('.event-select').checked=true" title="Reprovar" type="submit">Reprovar</button>
-                                <button class="icon-button danger" name="action" value="delete_events" onclick="this.closest('tr').querySelector('.event-select').checked=true; return confirm('Excluir definitivamente este evento coletado?')" title="Excluir" type="submit">Excluir</button>
+                                <div class="row-actions actions-inline">
+                                    <button class="icon-button" name="action" value="bulk_status" onclick="this.form.review_status.value='approved'; this.closest('tr').querySelector('.event-select').checked=true" title="Publicar" type="submit">Publicar</button>
+                                    <button class="icon-button danger" name="action" value="bulk_status" onclick="this.form.review_status.value='rejected'; this.closest('tr').querySelector('.event-select').checked=true" title="Reprovar" type="submit">Reprovar</button>
+                                    <button class="icon-button danger" name="action" value="delete_events" onclick="this.closest('tr').querySelector('.event-select').checked=true; return confirm('Excluir definitivamente este evento coletado?')" title="Excluir" type="submit">Excluir</button>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -322,4 +327,13 @@ function sort_link(string $label, string $asc, string $desc, string $currentSort
     $params['sort'] = $target;
     $indicator = in_array($currentSort, [$asc, $desc], true) ? ($currentSort === $asc ? ' ↑' : ' ↓') : '';
     return '<a class="table-sort" href="/admin/events.php?' . h(http_build_query($params)) . '">' . h($label . $indicator) . '</a>';
+}
+
+function format_event_year(int $year): string
+{
+    if ($year < 0) {
+        return abs($year) . ' a.C.';
+    }
+
+    return (string) $year;
 }

@@ -82,6 +82,7 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
     $year = (int) $event['year'];
     $description = trim(strip_tags((string) $event['text']));
     $title = make_event_title($description, $year);
+    $year = normalize_event_year_from_text($description, $year);
     $sourceUrl = wikimedia_event_url($event);
     $pageTitle = (string) ($event['pages'][0]['title'] ?? '');
     $sourceEventId = mb_substr(
@@ -168,12 +169,28 @@ function make_event_title(string $description, int $year): string
 {
     $title = preg_replace('/\s+/', ' ', $description);
     $title = trim((string) $title);
+    $title = preg_replace('/^\s*-?\d+\s*(?:BC|BCE|AD|CE)?\s*[-–—:]\s*/i', '', (string) $title);
+    $title = preg_replace('/\s*\(\s*-?\d+\s*(?:BC|BCE|AD|CE)?\s*\)\s*/i', ' ', (string) $title);
+    $title = trim(preg_replace('/\s+/u', ' ', (string) $title));
 
     if (mb_strlen($title, 'UTF-8') > 115) {
         $title = mb_substr($title, 0, 112, 'UTF-8') . '...';
     }
 
-    return $year . ' - ' . $title;
+    return $title;
+}
+
+function normalize_event_year_from_text(string $text, int $fallback): int
+{
+    if (preg_match('/^\s*(\d{1,6})\s*(BC|BCE)\b/i', $text, $matches)) {
+        return -1 * (int) $matches[1];
+    }
+
+    if (preg_match('/^\s*(\d{1,6})\s*(AD|CE)?\b/i', $text, $matches)) {
+        return (int) $matches[1];
+    }
+
+    return $fallback;
 }
 
 function wikimedia_event_url(array $event): ?string

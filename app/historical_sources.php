@@ -73,6 +73,7 @@ function save_wikidata_historical_event(array $row, int $month, int $day, ?strin
     }
 
     $title = make_event_title($label, $year);
+    $year = normalize_event_year_from_text($label, $year);
     $type = clean_context_text($row['typeLabel']['value'] ?? '');
     $place = clean_context_text($row['placeLabel']['value'] ?? '');
     $description = $label;
@@ -418,8 +419,9 @@ function wikidata_id_from_url(string $url): string
 
 function wikidata_year_from_date(string $date): ?int
 {
-    if (preg_match('/^-?\d+/', $date, $matches)) {
-        return (int) $matches[0];
+    if (preg_match('/^(-?)(\d+)/', $date, $matches)) {
+        $year = (int) $matches[2];
+        return $matches[1] === '-' ? -1 * $year : $year;
     }
 
     return null;
