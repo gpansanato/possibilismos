@@ -28,6 +28,8 @@ $search = trim($_GET['q'] ?? '');
 $sort = $_GET['sort'] ?? 'updated_desc';
 $items = collected_contexts_search($date, $selectedType !== '' ? $selectedType : null, $source, $search, $sort);
 $sourceOptions = public_context_source_options($date);
+$allItems = collected_contexts_for_date($date);
+$contextStats = public_context_stats($allItems);
 
 $dateLabel = $selectedDate->format('d/m/Y');
 $itemLabel = count($items) === 1
@@ -87,6 +89,47 @@ render_page_start('Contextos coletados', 'contexts', 'public', 'Noticias e tende
                 <a class="button button-secondary" href="/contextos.php">Hoje</a>
             </div>
 
+            <section class="context-summary-grid" aria-label="Resumo dos contextos coletados">
+                <article class="context-summary-card">
+                    <span class="eyebrow">Noticias</span>
+                    <strong><?= h((string) $contextStats['news']) ?></strong>
+                    <p>Itens noticiosos usados como sinal editorial do dia.</p>
+                </article>
+                <article class="context-summary-card">
+                    <span class="eyebrow">Tendencias</span>
+                    <strong><?= h((string) $contextStats['trends']) ?></strong>
+                    <p>Sinais tematicos coletados ou derivados das fontes configuradas.</p>
+                </article>
+                <article class="context-summary-card">
+                    <span class="eyebrow">Fontes</span>
+                    <strong><?= h((string) $contextStats['source_count']) ?></strong>
+                    <p>Origem dos sinais usados para compor o contexto editorial.</p>
+                </article>
+            </section>
+
+            <?php if ($contextStats['keywords'] || $contextStats['sources']): ?>
+                <section class="context-insights panel">
+                    <div>
+                        <span class="eyebrow">Termos recorrentes</span>
+                        <div class="context-keywords">
+                            <?php foreach ($contextStats['keywords'] as $keyword => $count): ?>
+                                <span class="context-keyword"><?= h($keyword) ?> <small><?= h((string) $count) ?></small></span>
+                            <?php endforeach; ?>
+                            <?php if (!$contextStats['keywords']): ?><p>Sem termos recorrentes suficientes.</p><?php endif; ?>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="eyebrow">Fontes mais presentes</span>
+                        <div class="context-keywords">
+                            <?php foreach ($contextStats['sources'] as $sourceName => $count): ?>
+                                <span class="context-keyword"><?= h(public_display_label($sourceName)) ?> <small><?= h((string) $count) ?></small></span>
+                            <?php endforeach; ?>
+                            <?php if (!$contextStats['sources']): ?><p>Sem fonte registrada.</p><?php endif; ?>
+                        </div>
+                    </div>
+                </section>
+            <?php endif; ?>
+
             <form class="filter-form public-filter" method="get" aria-label="Filtros de contextos coletados">
                 <label>Data <input type="date" name="date" value="<?= h($date) ?>"></label>
                 <label>Tipo
@@ -124,23 +167,26 @@ render_page_start('Contextos coletados', 'contexts', 'public', 'Noticias e tende
                 </section>
             <?php endif; ?>
 
-            <section class="published-list" aria-label="Lista de contextos coletados">
+            <section class="published-list context-list" aria-label="Lista de contextos coletados">
                 <?php foreach ($items as $item): ?>
                     <article class="published-card context-public-card">
                         <div class="published-card__body">
-                            <div class="published-card__top">
+                            <div class="context-card__top">
                                 <span class="status-badge <?= $item['context_type'] === 'news' ? 'is-approved' : 'is-pending' ?>"><?= h(public_context_type_label($item['context_type'])) ?></span>
-                                <span><?= h($item['source']) ?></span>
+                                <span class="context-source"><?= h(public_display_label($item['source'])) ?></span>
                             </div>
                             <h3><?= h($item['title']) ?></h3>
-                            <p class="published-card__summary"><?= h($item['raw_text'] ?: 'Resumo do contexto em validacao.') ?></p>
+                            <p class="published-card__summary"><?= h(public_context_excerpt($item)) ?></p>
                             <?php if (trim((string) $item['keywords']) !== ''): ?>
-                                <p class="published-card__reason"><?= h('Termos extraidos: ' . $item['keywords']) ?></p>
+                                <div class="context-keywords context-keywords--card">
+                                    <?php foreach (public_context_keyword_list((string) $item['keywords'], 6) as $keyword): ?>
+                                        <span class="context-keyword"><?= h($keyword) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
                             <?php endif; ?>
                             <div class="meta">
-                                <span><?= h($item['run_date']) ?></span>
-                                <span><?= h(public_context_type_label($item['context_type'])) ?></span>
-                                <span><?= h(public_display_label($item['source'])) ?></span>
+                                <span>Coleta <?= h($item['run_date']) ?></span>
+                                <span><?= h(public_context_signal_label($item)) ?></span>
                             </div>
                             <?php if ($item['source_url']): ?>
                                 <div class="published-card__actions">
@@ -192,4 +238,99 @@ function public_context_source_options(string $runDate): array
 function public_context_type_label(string $type): string
 {
     return $type === 'news' ? 'Noticia' : 'Tendencia';
+}
+
+function public_context_stats(array $items): array
+{
+    $sourceCounts = [];
+    $keywordCounts = [];
+    $news = 0;
+    $trends = 0;
+
+    foreach ($items as $item) {
+        if (($item['context_type'] ?? '') === 'news') {
+            $news++;
+        } else {
+            $trends++;
+        }
+
+        $source = trim((string) ($item['source'] ?? ''));
+        if ($source !== '') {
+            $sourceCounts[$source] = ($sourceCounts[$source] ?? 0) + 1;
+        }
+
+        foreach (public_context_keyword_list((string) ($item['keywords'] ?? ''), 20) as $keyword) {
+            if (public_context_is_stopword($keyword)) {
+                continue;
+            }
+            $keywordCounts[$keyword] = ($keywordCounts[$keyword] ?? 0) + 1;
+        }
+    }
+
+    arsort($sourceCounts);
+    arsort($keywordCounts);
+
+    return [
+        'news' => $news,
+        'trends' => $trends,
+        'source_count' => count($sourceCounts),
+        'sources' => array_slice($sourceCounts, 0, 6, true),
+        'keywords' => array_slice($keywordCounts, 0, 12, true),
+    ];
+}
+
+function public_context_keyword_list(string $keywords, int $limit): array
+{
+    $normalized = normalize_score_text($keywords);
+    $parts = preg_split('/\s+/u', $normalized);
+    $clean = [];
+    foreach ($parts ?: [] as $part) {
+        $part = trim($part);
+        if ($part === '' || mb_strlen($part, 'UTF-8') < 4) {
+            continue;
+        }
+        $clean[$part] = true;
+    }
+
+    return array_slice(array_keys($clean), 0, $limit);
+}
+
+function public_context_is_stopword(string $keyword): bool
+{
+    static $stopwords = [
+        'para' => true,
+        'como' => true,
+        'mais' => true,
+        'pela' => true,
+        'pelo' => true,
+        'sobre' => true,
+        'apos' => true,
+        'esta' => true,
+        'este' => true,
+        'that' => true,
+        'with' => true,
+        'from' => true,
+        'this' => true,
+        'have' => true,
+    ];
+
+    return isset($stopwords[$keyword]);
+}
+
+function public_context_excerpt(array $item): string
+{
+    $text = trim((string) ($item['raw_text'] ?? ''));
+    if ($text === '') {
+        $text = trim((string) ($item['title'] ?? ''));
+    }
+
+    return $text !== '' ? $text : 'Resumo do contexto em validacao.';
+}
+
+function public_context_signal_label(array $item): string
+{
+    $type = public_context_type_label((string) ($item['context_type'] ?? 'trend'));
+    $source = public_display_label((string) ($item['source'] ?? ''), 'fonte em validacao');
+
+    return $type . ' de ' . $source;
 }
