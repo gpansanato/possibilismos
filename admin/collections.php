@@ -39,9 +39,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processTitle = 'Processamento 1: eventos historicos';
             $processDescription = 'Coleta, normalizacao, deduplicacao e enriquecimento dos fatos historicos da data selecionada.';
             $processSteps = [
-                collection_process_step('Coleta de eventos historicos', 'Fontes estruturais consultadas para identificar fatos associados ao dia.', $result['imported'] . ' eventos processados'),
-                collection_process_step('Normalizacao e vinculo canonico', 'Registros importados foram tratados para evitar duplicidade e preservar origem, data, ano e chave canonica.', $imports['linked'] . ' imports vinculados'),
-                collection_process_step('Enriquecimento integrado', 'Fontes de apoio adicionam resumo, imagem, documentos e materiais complementares quando disponiveis.', $summary['enriched'] . ' eventos enriquecidos; ' . $summary['enrichment_records'] . ' registros salvos'),
+                collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fluxo iniciado.', '1 data processada'),
+                collection_process_step('Consultar Wikidata para eventos historicos do dia', 'Fonte estrutural consultada para identificar fatos associados ao dia.', $result['imported'] . ' registros recebidos/processados'),
+                collection_process_step('Acionar apoio Wikimedia quando necessario', 'Fontes de apoio consultadas durante descoberta e enriquecimento.', $summary['enrichment_records'] . ' registros de apoio salvos'),
+                collection_process_step('Normalizar titulo, data, ano, origem e chave canonica', 'Registros tratados para preservar origem, data, ano e chave canonica.', $imports['linked'] . ' imports vinculados'),
+                collection_process_step('Verificar duplicidades nos eventos e imports', 'Comparacao aplicada antes de gravar novos eventos.', $imports['ignored'] . ' registros ignorados por duplicidade'),
+                collection_process_step('Salvar ou atualizar eventos historicos coletados', 'Eventos canonicos persistidos ou vinculados a imports existentes.', $summary['total'] . ' eventos historicos na base para o dia'),
+                collection_process_step('Executar enriquecimento integrado nas fontes ativas', 'Descricoes, imagens e materiais complementares incorporados quando disponiveis.', $summary['enriched'] . ' eventos enriquecidos'),
+                collection_process_step('Atualizar resumo operacional da coleta', 'Contadores recalculados para a tabela de status.', $summary['enrichment_records'] . ' enriquecimentos salvos'),
+                collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', $imports['errors'] . ' falhas registradas'),
             ];
             $processSummary = collection_process_summary($startedAt, $startedLabel, [
                 'Registros encontrados' => $result['imported'],
@@ -60,9 +66,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processTitle = 'Processamento 2: contexto do dia';
             $processDescription = 'Coleta e higienizacao integrada de noticias e tendencias usadas como insumos contextuais.';
             $processSteps = [
-                collection_process_step('Coleta de noticias', 'Feeds e fontes noticiosas configuradas foram lidos para persistir itens de contexto editorial.', count($news) . ' noticias persistidas'),
-                collection_process_step('Coleta de tendencias', 'Sinais de tendencia foram coletados ou derivados das noticias quando a fonte externa nao retornou itens.', count($trends) . ' tendencias persistidas'),
-                collection_process_step('Base higienizada de contexto', 'Itens coletados foram reconstruidos na base operacional usada pela priorizacao.', $topics . ' topicos disponiveis'),
+                collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fontes de contexto identificadas.', '1 data processada'),
+                collection_process_step('Consultar feeds e APIs de noticias configuradas', 'Noticias do dia coletadas como insumo editorial.', count($news) . ' noticias persistidas'),
+                collection_process_step('Consultar fontes de tendencias configuradas', 'Sinais de tendencia coletados nas fontes habilitadas.', count($trends) . ' tendencias persistidas'),
+                collection_process_step('Derivar tendencias a partir das noticias quando necessario', 'Tendencias auxiliares geradas quando a fonte externa nao retornou itens suficientes.', count($trends) . ' tendencias disponiveis'),
+                collection_process_step('Extrair e normalizar palavras-chave', 'Termos e topicos higienizados para uso na priorizacao.', $topics . ' topicos operacionais'),
+                collection_process_step('Verificar duplicidades na base higienizada', 'Itens repetidos foram evitados antes da persistencia final.', 'Deduplicacao aplicada na persistencia'),
+                collection_process_step('Salvar noticias, tendencias e topicos operacionais', 'Contextos persistidos na base operacional.', (count($news) + count($trends)) . ' contextos salvos'),
+                collection_process_step('Atualizar resumo operacional do contexto', 'Contadores recalculados para a tabela de status.', $topics . ' topicos disponiveis'),
+                collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', '0 falhas registradas'),
             ];
             $processSummary = collection_process_summary($startedAt, $startedLabel, [
                 'Noticias encontradas' => count($news),
@@ -81,9 +93,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processTitle = 'Processamento 3: priorizacao de eventos';
             $processDescription = 'Aplicacao dos criterios editoriais sobre eventos historicos, noticias, tendencias e topicos de contexto.';
             $processSteps = [
-                collection_process_step('Leitura dos eventos historicos', 'Todos os eventos coletados para o dia foram considerados antes da ordenacao editorial.', $summary['total'] . ' eventos avaliaveis'),
-                collection_process_step('Carregamento do contexto do dia', 'Noticias, tendencias e topicos higienizados foram reunidos como sinais de apoio.', $contextTotal . ' contextos; ' . $topics . ' topicos'),
-                collection_process_step('Aplicacao dos criterios de priorizacao', 'O sistema recalculou score, motivos e resumo contextual para apoiar a curadoria.', count($ranked) . ' rankings gerados'),
+                collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e criterios de priorizacao carregados.', '1 data processada'),
+                collection_process_step('Carregar eventos historicos coletados', 'Eventos historicos disponiveis para o dia foram selecionados.', $summary['total'] . ' eventos avaliaveis'),
+                collection_process_step('Carregar noticias, tendencias e topicos higienizados', 'Sinais de contexto foram reunidos como apoio editorial.', $contextTotal . ' contextos; ' . $topics . ' topicos'),
+                collection_process_step('Aplicar relevancia historica base', 'Eventos receberam pontuacao inicial por relevancia historica.', $summary['total'] . ' eventos pontuados'),
+                collection_process_step('Calcular conexoes com noticias e tendencias', 'Termos e temas foram comparados com o contexto do dia.', $contextTotal . ' contextos considerados'),
+                collection_process_step('Aplicar bonus, categoria e diversidade', 'Ajustes editoriais foram aplicados ao ranking final.', count($ranked) . ' eventos ajustados'),
+                collection_process_step('Salvar score, motivos e resumo contextual', 'Score, motivos e justificativas foram persistidos.', count($ranked) . ' rankings gerados'),
+                collection_process_step('Atualizar status da priorizacao', 'Contadores recalculados para a tabela de status.', count($ranked) . ' rankings consolidados'),
+                collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', '0 falhas registradas'),
             ];
             $processSummary = collection_process_summary($startedAt, $startedLabel, [
                 'Eventos avaliados' => $summary['total'],
@@ -185,12 +203,15 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         <div class="progress-meter" aria-hidden="true">
             <span id="collection-progress-bar" style="width: <?= $processSteps ? '100' : '0' ?>%"></span>
         </div>
+        <div class="process-meta" id="collection-progress-meta">
+            <span id="collection-progress-status"><?= $processSteps ? 'Processamento concluido' : 'Aguardando execucao' ?></span>
+            <span id="collection-progress-elapsed"><?= $processSteps && isset($processSummary['Duracao']) ? 'Duracao: ' . h((string) $processSummary['Duracao']) : 'Tempo decorrido: 0s' ?></span>
+        </div>
         <div class="process-log" id="collection-progress-log">
             <?php if ($processSteps): ?>
                 <?php foreach ($processSteps as $index => $step): ?>
                     <div class="process-log__item is-done">
-                        <span>Concluido:</span>
-                        <strong><?= h($step['title']) ?></strong>
+                        <span>Concluido:</span> <strong><?= h($step['title']) ?></strong>
                         <p><?= h($step['description']) ?> <?= h($step['result']) ?></p>
                     </div>
                 <?php endforeach; ?>
@@ -241,6 +262,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         const logEl = document.getElementById('collection-progress-log');
         const summaryEl = document.getElementById('collection-process-summary');
         const progressBar = document.getElementById('collection-progress-bar');
+        const progressStatus = document.getElementById('collection-progress-status');
+        const progressElapsed = document.getElementById('collection-progress-elapsed');
         const statusRows = document.getElementById('collection-status-rows');
         if (!form || !panel || !logEl || !progressBar) {
             return;
@@ -249,6 +272,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         const flowStepsByAction = <?= json_encode($collectionFlowSteps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         let currentFlowSteps = [];
         let timer = null;
+        let elapsedTimer = null;
+        let startedAt = 0;
         let currentStep = 0;
 
         function setButtons(disabled) {
@@ -259,37 +284,43 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         }
 
         function renderLog(activeIndex, statuses) {
-            const steps = currentFlowSteps.length ? currentFlowSteps : ['Preparando execucao'];
-            logEl.innerHTML = steps.map((label, index) => {
+            const steps = (currentFlowSteps.length ? currentFlowSteps : [{ title: 'Preparando execucao' }]).map(normalizeStep);
+            logEl.innerHTML = steps.map((step, index) => {
                 const status = statuses[index] || (index < activeIndex ? 'done' : index === activeIndex ? 'running' : 'pending');
                 const statusLabel = status === 'done' ? 'Concluido' : status === 'running' ? 'Em execucao' : status === 'error' ? 'Erro' : 'Pendente';
+                const detail = [step.description, step.result].filter(Boolean).join(' ');
                 return '<div class="process-log__item is-' + status + '">' +
-                    '<span>' + statusLabel + ':</span>' +
-                    '<strong>' + escapeHtml(label) + '</strong>' +
+                    '<span>' + statusLabel + ':</span> ' +
+                    '<strong>' + escapeHtml(step.title) + '</strong>' +
+                    (detail ? '<p>' + escapeHtml(detail) + '</p>' : '') +
                     '</div>';
             }).join('');
             const done = statuses.filter((status) => status === 'done').length;
             const progress = Math.max(done, activeIndex + 1) / steps.length * 100;
-            progressBar.style.width = Math.min(100, progress) + '%';
+            progressBar.style.width = Math.min(96, progress) + '%';
         }
 
         function startVisualProgress(label, action) {
             currentStep = 0;
+            startedAt = Date.now();
             currentFlowSteps = flowStepsByAction[action] || flowStepsByAction.default || ['Preparando execucao', 'Finalizando execucao'];
             title.textContent = label || 'Processamento em andamento';
-            description.textContent = 'A execucao foi iniciada. Acompanhe as etapas enquanto o servidor processa a coleta.';
+            description.textContent = 'A execucao foi iniciada. O servidor esta processando a solicitacao; mantenha esta tela aberta ate o resumo final aparecer.';
             summaryEl.innerHTML = '';
+            updateElapsed();
+            progressStatus.textContent = 'Processamento em andamento';
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
             renderLog(0, []);
+            elapsedTimer = window.setInterval(updateElapsed, 1000);
             timer = window.setInterval(() => {
-                currentStep = Math.min(currentStep + 1, currentFlowSteps.length - 2);
+                currentStep = Math.min(currentStep + 1, currentFlowSteps.length - 1);
                 renderLog(currentStep, []);
             }, 6500);
         }
 
         function finishVisualProgress(payload) {
-            window.clearInterval(timer);
-            const steps = currentFlowSteps.length ? currentFlowSteps : (payload.steps || []).map((step) => step.title);
+            clearTimers();
+            const steps = payload.steps && payload.steps.length ? payload.steps : currentFlowSteps;
             currentFlowSteps = steps.length ? steps : ['Finalizando execucao'];
             const statuses = currentFlowSteps.map(() => payload.ok ? 'done' : 'pending');
             if (!payload.ok) {
@@ -303,6 +334,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             description.textContent = payload.ok
                 ? (payload.description || payload.message || 'Execucao finalizada.')
                 : (payload.error || 'Nao foi possivel concluir o processamento.');
+            progressStatus.textContent = payload.ok ? 'Processamento concluido' : 'Processamento interrompido';
+            updateElapsed(payload.summary && payload.summary.Duracao ? payload.summary.Duracao : null);
             renderLog(currentFlowSteps.length, statuses);
             progressBar.style.width = payload.ok ? '100%' : Math.max(12, currentStep / currentFlowSteps.length * 100) + '%';
             progressBar.classList.toggle('is-error', !payload.ok);
@@ -310,6 +343,35 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             if (payload.tableRows && statusRows) {
                 statusRows.innerHTML = payload.tableRows;
             }
+        }
+
+        function clearTimers() {
+            window.clearInterval(timer);
+            window.clearInterval(elapsedTimer);
+        }
+
+        function updateElapsed(finalDuration) {
+            if (!progressElapsed) {
+                return;
+            }
+            if (finalDuration) {
+                progressElapsed.textContent = 'Duracao: ' + finalDuration;
+                return;
+            }
+            const seconds = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+            progressElapsed.textContent = 'Tempo decorrido: ' + seconds + 's';
+        }
+
+        function normalizeStep(step) {
+            if (typeof step === 'string') {
+                return { title: step, description: '', result: '' };
+            }
+
+            return {
+                title: step.title || 'Etapa operacional',
+                description: step.description || '',
+                result: step.result || ''
+            };
         }
 
         function renderSummary(summary) {
@@ -364,6 +426,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                     summary: { 'Falhas': 1, 'Mensagem': error.message }
                 });
             } finally {
+                clearTimers();
                 setButtons(false);
             }
         });
@@ -418,43 +481,43 @@ function collection_flow_steps(): array
 {
     return [
         'process_events' => [
-            'Preparar execucao para a data selecionada',
-            'Consultar Wikidata para eventos historicos do dia',
-            'Acionar apoio Wikimedia quando necessario',
-            'Normalizar titulo, data, ano, origem e chave canonica',
-            'Verificar duplicidades nos eventos e imports',
-            'Salvar ou atualizar eventos historicos coletados',
-            'Executar enriquecimento integrado nas fontes ativas',
-            'Atualizar resumo operacional da coleta',
-            'Finalizar execucao',
+            collection_process_step('Preparar execucao para a data selecionada', 'Valida a data, monta parametros da coleta e registra o inicio do fluxo.', 'Quantidade tratada: aguardando retorno do servidor.'),
+            collection_process_step('Consultar Wikidata para eventos historicos do dia', 'Busca fatos historicos associados ao dia e mes selecionados.', 'Quantidade tratada: eventos encontrados na fonte.'),
+            collection_process_step('Acionar apoio Wikimedia quando necessario', 'Complementa a descoberta quando a fonte estrutural nao retorna contexto suficiente.', 'Quantidade tratada: registros de apoio consultados.'),
+            collection_process_step('Normalizar titulo, data, ano, origem e chave canonica', 'Remove duplicidade textual, separa ano/data e prepara a chave canonica do evento.', 'Quantidade tratada: registros importados normalizados.'),
+            collection_process_step('Verificar duplicidades nos eventos e imports', 'Compara fonte, chave canonica, titulo, ano e data historica antes de gravar.', 'Quantidade tratada: novos, vinculados e ignorados por duplicidade.'),
+            collection_process_step('Salvar ou atualizar eventos historicos coletados', 'Persiste o evento canonico ou atualiza o vinculo de importacao existente.', 'Quantidade tratada: eventos salvos ou atualizados.'),
+            collection_process_step('Executar enriquecimento integrado nas fontes ativas', 'Busca resumos, imagens, documentos e referencias complementares quando disponiveis.', 'Quantidade tratada: enriquecimentos gravados.'),
+            collection_process_step('Atualizar resumo operacional da coleta', 'Recalcula contadores exibidos na tabela de status dos processamentos.', 'Quantidade tratada: total consolidado para a data.'),
+            collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
         ],
         'process_context' => [
-            'Preparar execucao para a data selecionada',
-            'Consultar feeds e APIs de noticias configuradas',
-            'Consultar fontes de tendencias configuradas',
-            'Derivar tendencias a partir das noticias quando necessario',
-            'Extrair e normalizar palavras-chave',
-            'Verificar duplicidades na base higienizada',
-            'Salvar noticias, tendencias e topicos operacionais',
-            'Atualizar resumo operacional do contexto',
-            'Finalizar execucao',
+            collection_process_step('Preparar execucao para a data selecionada', 'Valida a data e identifica as fontes de contexto ativas.', 'Quantidade tratada: aguardando retorno do servidor.'),
+            collection_process_step('Consultar feeds e APIs de noticias configuradas', 'Coleta noticias do dia usadas como insumo de contexto editorial.', 'Quantidade tratada: noticias encontradas.'),
+            collection_process_step('Consultar fontes de tendencias configuradas', 'Busca sinais de tendencia nas fontes habilitadas.', 'Quantidade tratada: tendencias encontradas.'),
+            collection_process_step('Derivar tendencias a partir das noticias quando necessario', 'Gera sinais auxiliares quando uma fonte externa nao retorna itens suficientes.', 'Quantidade tratada: tendencias derivadas.'),
+            collection_process_step('Extrair e normalizar palavras-chave', 'Higieniza termos, temas e topicos para uso na priorizacao.', 'Quantidade tratada: termos extraidos.'),
+            collection_process_step('Verificar duplicidades na base higienizada', 'Evita repetir noticias, tendencias e topicos ja persistidos para a data.', 'Quantidade tratada: registros novos e ignorados.'),
+            collection_process_step('Salvar noticias, tendencias e topicos operacionais', 'Persiste os contextos coletados e a base operacional de topicos.', 'Quantidade tratada: contextos salvos.'),
+            collection_process_step('Atualizar resumo operacional do contexto', 'Recalcula os contadores de noticias, tendencias e topicos.', 'Quantidade tratada: totais consolidados.'),
+            collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
         ],
         'process_priority' => [
-            'Preparar execucao para a data selecionada',
-            'Carregar eventos historicos coletados',
-            'Carregar noticias, tendencias e topicos higienizados',
-            'Aplicar relevancia historica base',
-            'Calcular conexoes com noticias e tendencias',
-            'Aplicar bonus, categoria e diversidade',
-            'Salvar score, motivos e resumo contextual',
-            'Atualizar status da priorizacao',
-            'Finalizar execucao',
+            collection_process_step('Preparar execucao para a data selecionada', 'Valida a data e prepara os criterios ativos de priorizacao.', 'Quantidade tratada: aguardando retorno do servidor.'),
+            collection_process_step('Carregar eventos historicos coletados', 'Seleciona todos os eventos historicos disponiveis para o dia avaliado.', 'Quantidade tratada: eventos avaliaveis.'),
+            collection_process_step('Carregar noticias, tendencias e topicos higienizados', 'Reune os sinais de contexto que podem influenciar a justificativa editorial.', 'Quantidade tratada: contextos considerados.'),
+            collection_process_step('Aplicar relevancia historica base', 'Calcula a forca inicial do evento antes das conexoes com o dia.', 'Quantidade tratada: eventos pontuados.'),
+            collection_process_step('Calcular conexoes com noticias e tendencias', 'Compara termos, temas e entidades para explicar por que o fato importa hoje.', 'Quantidade tratada: conexoes encontradas.'),
+            collection_process_step('Aplicar bonus, categoria e diversidade', 'Aplica aniversario, categoria e ajustes para evitar repeticao excessiva.', 'Quantidade tratada: ajustes aplicados.'),
+            collection_process_step('Salvar score, motivos e resumo contextual', 'Grava o ranking, a decomposicao do score e a justificativa editorial.', 'Quantidade tratada: rankings salvos.'),
+            collection_process_step('Atualizar status da priorizacao', 'Atualiza os indicadores da tabela de status dos processamentos.', 'Quantidade tratada: total consolidado para a data.'),
+            collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
         ],
         'default' => [
-            'Preparar execucao',
-            'Executar processamento',
-            'Atualizar resumo operacional',
-            'Finalizar execucao',
+            collection_process_step('Preparar execucao', 'Valida parametros e inicia o fluxo.', 'Quantidade tratada: aguardando retorno.'),
+            collection_process_step('Executar processamento', 'Executa a operacao solicitada.', 'Quantidade tratada: registros processados.'),
+            collection_process_step('Atualizar resumo operacional', 'Recalcula os indicadores da tela.', 'Quantidade tratada: totais consolidados.'),
+            collection_process_step('Finalizar execucao', 'Devolve o resumo final para a interface.', 'Quantidade tratada: resumo final.'),
         ],
     ];
 }

@@ -32,7 +32,7 @@ function render_page_start(string $title, string $active = 'home', string $area 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= h($title) ?></title>
-    <link rel="stylesheet" href="/public/style.css">
+    <link rel="stylesheet" href="/public/style.css?v=<?= h((string) filemtime(__DIR__ . '/../public/style.css')) ?>">
 </head>
 <body>
     <header class="site-header">
