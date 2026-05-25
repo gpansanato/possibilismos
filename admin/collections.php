@@ -166,7 +166,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             <button type="submit">Ver status</button>
             <a class="button button-secondary" href="/admin/collections.php">Hoje</a>
         </form>
-        <form class="actions" method="post" id="collection-process-form">
+        <form class="actions" method="post" id="collection-process-form" action="/admin/collections.php">
             <input type="hidden" name="date" value="<?= h($date) ?>">
             <button name="action" value="process_events" type="submit" data-process-label="Processamento 1: eventos historicos">Processar eventos historicos</button>
             <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 2: contexto do dia">Processar contexto do dia</button>
@@ -189,7 +189,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             <?php if ($processSteps): ?>
                 <?php foreach ($processSteps as $index => $step): ?>
                     <div class="process-log__item is-done">
-                        <span>Concluido</span>
+                        <span>Concluido:</span>
                         <strong><?= h($step['title']) ?></strong>
                         <p><?= h($step['description']) ?> <?= h($step['result']) ?></p>
                     </div>
@@ -264,7 +264,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                 const status = statuses[index] || (index < activeIndex ? 'done' : index === activeIndex ? 'running' : 'pending');
                 const statusLabel = status === 'done' ? 'Concluido' : status === 'running' ? 'Em execucao' : status === 'error' ? 'Erro' : 'Pendente';
                 return '<div class="process-log__item is-' + status + '">' +
-                    '<span>' + statusLabel + '</span>' +
+                    '<span>' + statusLabel + ':</span>' +
                     '<strong>' + escapeHtml(label) + '</strong>' +
                     '</div>';
             }).join('');
@@ -344,7 +344,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             formData.set('async', '1');
 
             try {
-                const response = await fetch(form.action || window.location.href, {
+                const endpoint = form.getAttribute('action') || '/admin/collections.php';
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     body: formData,
                     headers: {
