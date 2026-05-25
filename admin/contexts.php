@@ -3,8 +3,6 @@ require_once __DIR__ . '/../app/bootstrap.php';
 require_admin();
 
 $today = today_key();
-$message = null;
-$error = null;
 $runDate = $_GET['date'] ?? $today['date'];
 $type = $_GET['type'] ?? '';
 $source = trim($_GET['source'] ?? '');
@@ -12,55 +10,13 @@ $search = trim($_GET['q'] ?? '');
 $sort = $_GET['sort'] ?? 'updated_desc';
 $selectedType = in_array($type, ['news', 'trend'], true) ? $type : null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    $actionDate = $_POST['date'] ?? $runDate;
-    if (!is_string($actionDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $actionDate)) {
-        $actionDate = $today['date'];
-    }
-
-    try {
-        if ($action === 'news') {
-            $items = collect_daily_news_topics($actionDate);
-            $message = count($items) . ' notícias persistidas/coletadas.';
-        } elseif ($action === 'trends') {
-            $items = collect_daily_trend_topics($actionDate);
-            $message = count($items) . ' tendências persistidas/coletadas.';
-        } elseif ($action === 'context') {
-            $news = collect_daily_news_topics($actionDate);
-            $trends = collect_daily_trend_topics($actionDate);
-            $message = count($news) . ' notícias e ' . count($trends) . ' tendências persistidas/coletadas.';
-        }
-        $runDate = $actionDate;
-    } catch (Throwable $e) {
-        $error = $e->getMessage();
-    }
-}
-
 $items = collected_contexts_search($runDate, $selectedType, $source, $search, $sort);
 
 $newsCount = collected_contexts_count_for_date($runDate, 'news');
 $trendCount = collected_contexts_count_for_date($runDate, 'trend');
 
-render_page_start('Notícias e tendências', 'contexts', 'admin', 'Listagem compacta dos itens coletados, higienizados e usados como contexto do score.');
+render_page_start('Notícias e tendências', 'contexts', 'admin', 'Consulta dos itens coletados, higienizados e usados como contexto do score.');
 ?>
-    <?php if ($error): ?><section class="empty"><p><?= h($error) ?></p></section><?php endif; ?>
-    <?php if ($message): ?><section class="panel"><p><?= h($message) ?></p></section><?php endif; ?>
-
-    <section class="panel admin-toolbar">
-        <form class="date-filter" method="get">
-            <label>Data do contexto <input type="date" name="date" value="<?= h($runDate) ?>"></label>
-            <button type="submit">Filtrar data</button>
-            <a class="button button-secondary" href="/admin/contexts.php">Hoje</a>
-        </form>
-        <form class="actions actions-inline" method="post">
-            <input type="hidden" name="date" value="<?= h($runDate) ?>">
-            <button name="action" value="news" type="submit">Coletar notícias</button>
-            <button class="button-secondary" name="action" value="trends" type="submit">Coletar tendências</button>
-            <button class="button-secondary" name="action" value="context" type="submit">Coletar contexto</button>
-        </form>
-    </section>
-
     <section class="panel">
         <form class="filter-form" method="get">
             <label>Data <input type="date" name="date" value="<?= h($runDate) ?>"></label>
@@ -101,7 +57,7 @@ render_page_start('Notícias e tendências', 'contexts', 'admin', 'Listagem comp
 
     <?php if (!$items): ?>
         <section class="empty">
-            <p>Nenhum item persistido para os filtros selecionados. Execute a coleta de notícias, tendências ou contexto completo.</p>
+            <p>Nenhum item persistido para os filtros selecionados. Execute novas coletas em Fontes.</p>
         </section>
     <?php endif; ?>
 

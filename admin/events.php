@@ -52,7 +52,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_string($actionDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $actionDate)) {
         $actionDate = $today['date'];
     }
-    $parts = date_parts_from_run_date($actionDate);
     $selectedIds = array_values(array_filter(array_map('intval', $_POST['selected_ids'] ?? [])));
     $postReturnTo = $_POST['return_to'] ?? ('/admin/events.php?date=' . $actionDate);
     if (!is_string($postReturnTo) || strpos($postReturnTo, '/admin/') !== 0) {
@@ -60,31 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-        if ($action === 'collect_events') {
-            $result = collect_historical_events_for_day($parts['month'], $parts['day'], $actionDate);
-            $message = $result['imported'] . ' eventos coletados e ' . $result['enriched'] . ' enriquecimentos salvos.';
-            $month = (string) $parts['month'];
-            $day = (string) $parts['day'];
-            $date = $actionDate;
-        } elseif ($action === 'enrich_events') {
-            $scope = $_POST['enrich_scope'] ?? 'day';
-            if ($scope === 'selected' && !$selectedIds) {
-                $ids = [];
-                $error = 'Selecione ao menos um evento para enriquecer.';
-            } else {
-                $ids = $selectedIds ?: event_ids_for_day($parts['month'], $parts['day']);
-            }
-            $enriched = 0;
-            foreach ($ids as $eventId) {
-                $enriched += enrich_historical_event((int) $eventId);
-            }
-            if ($ids) {
-                $message = count($ids) . ' eventos processados para enriquecimento; ' . $enriched . ' registros salvos/atualizados.';
-            }
-        } elseif ($action === 'prioritize_events') {
-            $result = apply_daily_priority_score($actionDate);
-            $message = count($result) . ' eventos priorizados para ' . $actionDate . '.';
-        } elseif (in_array($action, ['bulk_publish', 'bulk_reject'], true)) {
+        if (in_array($action, ['bulk_publish', 'bulk_reject'], true)) {
             $reviewStatus = $action === 'bulk_publish' ? 'approved' : 'rejected';
             if (!$selectedIds) {
                 $error = 'Selecione ao menos um evento para aplicar a ação.';
@@ -176,7 +151,7 @@ foreach ($counts as $row) {
     $countByStatus[$row['review_status']] = (int) $row['total'];
 }
 
-render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, enriquecimento e priorização dos fatos históricos.');
+render_page_start('Eventos históricos', 'events', 'admin', 'Consulta, curadoria e gestão editorial dos fatos históricos coletados.');
 ?>
     <?php if ($error): ?><section class="empty"><p><?= h($error) ?></p></section><?php endif; ?>
     <?php if ($message): ?><section class="panel"><p><?= h($message) ?></p></section><?php endif; ?>
@@ -206,21 +181,6 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
         </form>
     </section>
 
-    <section class="panel admin-toolbar">
-        <div>
-            <span class="eyebrow">Operações da data</span>
-            <p>Use a data filtrada para coletar, enriquecer ou abrir a priorização dos eventos.</p>
-        </div>
-        <form class="actions actions-inline" method="post">
-            <input type="hidden" name="date" value="<?= h($date) ?>">
-            <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
-            <button name="action" value="collect_events" type="submit">Coletar eventos</button>
-            <input type="hidden" name="enrich_scope" value="day">
-            <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer dia</button>
-            <a class="button button-secondary" href="/admin/priority.php?date=<?= h($date) ?>">Priorizar eventos</a>
-        </form>
-    </section>
-
     <section class="section-heading">
         <div>
             <p class="eyebrow">
@@ -237,11 +197,9 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
         <input type="hidden" name="date" value="<?= h($date) ?>">
         <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
         <section class="bulk-toolbar">
-            <input type="hidden" name="enrich_scope" value="selected">
             <span class="eyebrow">Ações em lote</span>
             <button name="action" value="bulk_publish" type="submit">Publicar selecionados</button>
             <button class="button-secondary" name="action" value="bulk_reject" type="submit">Reprovar selecionados</button>
-            <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer selecionados</button>
             <button class="danger" name="action" value="delete_events" type="submit" onclick="return confirm('Excluir definitivamente os eventos selecionados?')">Excluir selecionados</button>
         </section>
 
@@ -304,13 +262,6 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Coleta, curadoria, 
 <?php render_page_end(); ?>
 
 <?php
-function event_ids_for_day(int $month, int $day): array
-{
-    $stmt = db()->prepare('SELECT id FROM events WHERE event_month = ? AND event_day = ?');
-    $stmt->execute([$month, $day]);
-    return array_map('intval', array_column($stmt->fetchAll(), 'id'));
-}
-
 function sort_link(string $label, string $asc, string $desc, string $currentSort): string
 {
     $target = $currentSort === $asc ? $desc : $asc;

@@ -5,25 +5,21 @@ require_admin();
 render_page_start('Painel administrativo', 'dashboard', 'admin', 'Atalhos de operacao para coletas, curadoria e priorizacao.');
 ?>
     <section class="option-grid" aria-label="Opcoes administrativas">
-        <a class="option-card" href="/admin/collections.php">
-            <span>Coletas</span>
-            <strong>Executar coletas operacionais</strong>
+        <a class="option-card" href="/admin/sources.php">
+            <span>Fontes e coletas</span>
+            <strong>Executar processamentos operacionais</strong>
         </a>
         <a class="option-card" href="/admin/contexts.php">
             <span>Base higienizada</span>
             <strong>Ver noticias e tendencias persistidas</strong>
-        </a>
-        <a class="option-card" href="/admin/apply-score.php">
-            <span>Etapa 4</span>
-            <strong>Priorizar eventos historicos</strong>
         </a>
         <a class="option-card" href="/admin/priority.php">
             <span>Analise</span>
             <strong>Ver priorizacoes e criterios</strong>
         </a>
         <a class="option-card" href="/admin/collections.php">
-            <span>Automacao</span>
-            <strong>Executar processo completo em Coletas</strong>
+            <span>Status</span>
+            <strong>Acompanhar coletas por data</strong>
         </a>
         <a class="option-card" href="/admin/events.php">
             <span>Base historica</span>

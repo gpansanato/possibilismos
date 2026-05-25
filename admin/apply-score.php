@@ -2,55 +2,17 @@
 require_once __DIR__ . '/../app/bootstrap.php';
 require_admin();
 
-$result = null;
-$error = null;
 $today = today_key();
-$runDate = $_POST['date'] ?? $_GET['date'] ?? $today['date'];
-$dateParts = date_parts_from_run_date($runDate);
-$historicalEvents = historical_events_count_for_day($dateParts['month'], $dateParts['day']);
-$topicsCount = current_topics_count_for_date($runDate);
-$newsCount = collected_contexts_count_for_date($runDate, 'news');
-$trendsCount = collected_contexts_count_for_date($runDate, 'trend');
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
-        $result = apply_daily_priority_score($runDate);
-        $historicalEvents = historical_events_count_for_day($dateParts['month'], $dateParts['day']);
-        $topicsCount = current_topics_count_for_date($runDate);
-        $newsCount = collected_contexts_count_for_date($runDate, 'news');
-        $trendsCount = collected_contexts_count_for_date($runDate, 'trend');
-    } catch (Throwable $e) {
-        $error = $e->getMessage();
-    }
+$runDate = $_GET['date'] ?? $today['date'];
+if (!is_string($runDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $runDate)) {
+    $runDate = $today['date'];
 }
 
-render_page_start('Priorização de eventos históricos', 'apply-score', 'admin', 'Relaciona todos os eventos históricos aprovados do dia avaliado com todas as notícias e tendências da base de contexto.');
+render_page_start('Priorização centralizada', 'sources', 'admin', 'A execução da priorização foi movida para Fontes e coletas.');
 ?>
     <section class="panel">
-        <h1>Executar priorizacao</h1>
-        <form method="post">
-            <label>Data avaliada <input type="date" name="date" value="<?= h($runDate) ?>"></label>
-            <button type="submit">Priorizar eventos agora</button>
-        </form>
-        <?php if ($error): ?><p><?= h($error) ?></p><?php endif; ?>
-        <p>Eventos historicos no dia avaliado: <?= h((string) $historicalEvents) ?></p>
-        <p>Contextos disponiveis na base higienizada: <?= h((string) ($newsCount + $trendsCount)) ?> no total, <?= h((string) $newsCount) ?> noticias, <?= h((string) $trendsCount) ?> tendencias.</p>
-        <p>Topicos operacionais reconstruidos para o calculo: <?= h((string) $topicsCount) ?></p>
-        <?php if ($result !== null): ?><p><?= count($result) ?> eventos priorizados e salvos.</p><?php endif; ?>
+        <h1>Processamento centralizado em Fontes</h1>
+        <p>A priorização de eventos agora é executada na central de Fontes, junto com coletas de eventos, notícias, tendências e enriquecimentos.</p>
+        <p><a class="button" href="/admin/sources.php?date=<?= h($runDate) ?>">Abrir Fontes e coletas</a></p>
     </section>
-
-    <?php if ($result): ?>
-        <section class="list">
-            <?php foreach ($result as $item): ?>
-                <article class="event">
-                    <div class="year"><?= h((string) $item['event']['year']) ?></div>
-                    <div>
-                        <h2><?= h($item['event']['title']) ?></h2>
-                        <p><?= h($item['context_summary']) ?></p>
-                        <p class="meta">Prioridade <?= h(number_format((float) $item['score'], 1)) ?></p>
-                    </div>
-                </article>
-            <?php endforeach; ?>
-        </section>
-    <?php endif; ?>
 <?php render_page_end(); ?>

@@ -4,7 +4,7 @@ function nav_items(string $area): array
 {
     if ($area === 'admin') {
         return [
-            ['key' => 'collections', 'label' => 'Coletas', 'href' => '/admin/collections.php'],
+            ['key' => 'sources', 'label' => 'Fontes', 'href' => '/admin/sources.php'],
             ['key' => 'events', 'label' => 'Eventos', 'href' => '/admin/events.php'],
             ['key' => 'contexts', 'label' => 'Contexto', 'href' => '/admin/contexts.php'],
             ['key' => 'db-check', 'label' => 'Banco', 'href' => '/admin/db-check.php'],
