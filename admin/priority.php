@@ -37,7 +37,7 @@ render_page_start('Priorização de eventos', 'priority', 'admin', 'Revise crit�
 
     <section class="panel">
         <h1>Parâmetros de priorização</h1>
-        <p>Revise os parâmetros de cálculo. A execução da priorização foi centralizada em Fontes.</p>
+        <p>Revise os parâmetros de cálculo. A execução da priorização foi centralizada em Coletas.</p>
         <?php if ($saved): ?><p>Parâmetros atualizados.</p><?php endif; ?>
         <form class="settings-grid" method="post">
             <label>
@@ -51,7 +51,7 @@ render_page_start('Priorização de eventos', 'priority', 'admin', 'Revise crit�
                 </label>
             <?php endforeach; ?>
             <button type="submit">Salvar parâmetros</button>
-            <a class="button button-secondary" href="/admin/sources.php?date=<?= h($runDate) ?>">Executar em Fontes</a>
+            <a class="button button-secondary" href="/admin/collections.php?date=<?= h($runDate) ?>">Executar em Coletas</a>
             <a class="button button-secondary" href="/admin/events.php?date=<?= h($runDate) ?>">Voltar para eventos</a>
         </form>
     </section>
@@ -74,7 +74,7 @@ render_page_start('Priorização de eventos', 'priority', 'admin', 'Revise crit�
 
     <?php if (!$rankings): ?>
         <section class="empty">
-            <p>Nenhuma priorização aplicada para esta data. Execute a priorização em Fontes.</p>
+            <p>Nenhuma priorização aplicada para esta data. Execute a priorização em Coletas.</p>
         </section>
     <?php endif; ?>
 

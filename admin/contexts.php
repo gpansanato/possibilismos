@@ -57,7 +57,7 @@ render_page_start('Notícias e tendências', 'contexts', 'admin', 'Consulta dos 
 
     <?php if (!$items): ?>
         <section class="empty">
-            <p>Nenhum item persistido para os filtros selecionados. Execute novas coletas em Fontes.</p>
+            <p>Nenhum item persistido para os filtros selecionados. Execute novas coletas em Coletas.</p>
         </section>
     <?php endif; ?>
 

@@ -2,13 +2,13 @@
 require_once __DIR__ . '/../app/bootstrap.php';
 
 if (current_user()) {
-    redirect('/admin/dashboard.php');
+    redirect('/admin/collections.php');
 }
 
 $error = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (login_user($_POST['email'] ?? '', $_POST['password'] ?? '')) {
-        redirect('/admin/dashboard.php');
+        redirect('/admin/collections.php');
     }
 
     $error = 'Login invalido.';
