@@ -144,6 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'ok' => $error === null,
             'message' => $message,
             'error' => $error,
+            'date' => $date,
             'title' => $processTitle,
             'description' => $processDescription,
             'steps' => $processSteps,
@@ -180,12 +181,12 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             </div>
         </div>
         <form class="date-filter" method="get">
-            <label>Data de referencia <input type="date" name="date" value="<?= h($date) ?>"></label>
+            <label>Data de referencia <input type="date" name="date" id="collection-date-input" value="<?= h($date) ?>"></label>
             <button type="submit">Ver status</button>
             <a class="button button-secondary" href="/admin/collections.php">Hoje</a>
         </form>
         <form class="actions" method="post" id="collection-process-form" action="/admin/collections.php">
-            <input type="hidden" name="date" value="<?= h($date) ?>">
+            <input type="hidden" name="date" id="collection-process-date" value="<?= h($date) ?>">
             <button name="action" value="process_events" type="submit" data-process-label="Processamento 1: eventos historicos">Processar eventos historicos</button>
             <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 2: contexto do dia">Processar contexto do dia</button>
             <button class="button-secondary" name="action" value="process_priority" type="submit" data-process-label="Processamento 3: priorizacao de eventos">Aplicar priorizacao</button>
@@ -231,7 +232,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
     <section class="panel">
         <div class="section-heading">
             <div>
-                <p class="eyebrow"><?= h($date) ?></p>
+                <p class="eyebrow" id="collection-status-date"><?= h($date) ?></p>
                 <h2>Status dos processamentos</h2>
             </div>
         </div>
@@ -265,6 +266,9 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         const progressStatus = document.getElementById('collection-progress-status');
         const progressElapsed = document.getElementById('collection-progress-elapsed');
         const statusRows = document.getElementById('collection-status-rows');
+        const statusDate = document.getElementById('collection-status-date');
+        const dateInput = document.getElementById('collection-date-input');
+        const processDate = document.getElementById('collection-process-date');
         if (!form || !panel || !logEl || !progressBar) {
             return;
         }
@@ -343,6 +347,9 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             if (payload.tableRows && statusRows) {
                 statusRows.innerHTML = payload.tableRows;
             }
+            if (payload.date && statusDate) {
+                statusDate.textContent = payload.date;
+            }
         }
 
         function clearTimers() {
@@ -402,7 +409,13 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             startVisualProgress(submitter.dataset.processLabel, submitter.value);
 
             const formData = new FormData(form);
+            if (dateInput && processDate) {
+                processDate.value = dateInput.value || processDate.value;
+            }
             formData.set(submitter.name, submitter.value);
+            if (dateInput && dateInput.value) {
+                formData.set('date', dateInput.value);
+            }
             formData.set('async', '1');
 
             try {
