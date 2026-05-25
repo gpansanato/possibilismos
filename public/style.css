@@ -1023,6 +1023,13 @@ button:hover,
     color: var(--color-text-primary);
 }
 
+.source-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-width: 180px;
+}
+
 .filter-form {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

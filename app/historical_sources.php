@@ -199,13 +199,13 @@ function enrich_historical_event(int $eventId, array $seed = []): int
         $saved += enrich_event_from_library_of_congress($event, $settings);
     }
     if (!empty($settings['europeana']['enabled']) && !empty($settings['europeana']['api_key'])) {
-        $saved += enrich_event_from_simple_search($event, 'Europeana', 'cultural', $settings['europeana']);
+        $saved += enrich_event_from_europeana($event, $settings['europeana']);
     }
     if (!empty($settings['smithsonian']['enabled']) && !empty($settings['smithsonian']['api_key'])) {
-        $saved += enrich_event_from_simple_search($event, 'Smithsonian Open Access', 'museum', $settings['smithsonian']);
+        $saved += enrich_event_from_smithsonian($event, $settings['smithsonian']);
     }
     if (!empty($settings['dpla']['enabled']) && !empty($settings['dpla']['api_key'])) {
-        $saved += enrich_event_from_simple_search($event, 'DPLA / National Archives', 'archive', $settings['dpla']);
+        $saved += enrich_event_from_dpla($event, $settings['dpla']);
     }
     if (!empty($settings['openhistoricalmap']['enabled']) && !empty($settings['openhistoricalmap']['url'])) {
         $saved += enrich_event_from_openhistoricalmap($event, $settings['openhistoricalmap']);
@@ -337,6 +337,121 @@ function enrich_event_from_simple_search(array $event, string $source, string $r
     return 1;
 }
 
+function enrich_event_from_europeana(array $event, array $settings): int
+{
+    $query = event_search_query($event);
+    $url = ($settings['url'] ?? 'https://api.europeana.eu/record/v2/search.json') . '?' . http_build_query([
+        'query' => $query,
+        'wskey' => $settings['api_key'] ?? '',
+        'rows' => 1,
+        'profile' => 'rich',
+    ]);
+    $body = http_get_json($url, historical_user_agent());
+    $data = $body ? json_decode($body, true) : null;
+    $item = is_array($data) ? ($data['items'][0] ?? null) : null;
+    if (!is_array($item)) {
+        return 0;
+    }
+
+    $title = first_text_value($item['title'] ?? null);
+    if ($title === '') {
+        return 0;
+    }
+
+    save_event_enrichment((int) $event['id'], [
+        'source' => 'Europeana',
+        'role' => 'cultural',
+        'title' => $title,
+        'description' => first_text_value($item['dcDescription'] ?? $item['description'] ?? null),
+        'source_url' => first_text_value($item['guid'] ?? $item['link'] ?? $item['edmIsShownAt'] ?? null),
+        'image_url' => first_text_value($item['edmPreview'] ?? null),
+        'license_label' => first_text_value($item['rights'] ?? null),
+        'external_id' => first_text_value($item['id'] ?? null) ?: normalize_context_key($title),
+        'metadata' => $item,
+    ]);
+
+    return 1;
+}
+
+function enrich_event_from_smithsonian(array $event, array $settings): int
+{
+    $query = event_search_query($event);
+    $url = ($settings['url'] ?? 'https://api.si.edu/openaccess/api/v1.0/search') . '?' . http_build_query([
+        'api_key' => $settings['api_key'] ?? '',
+        'q' => $query,
+        'rows' => 1,
+        'start' => 0,
+    ]);
+    $body = http_get_json($url, historical_user_agent());
+    $data = $body ? json_decode($body, true) : null;
+    $row = is_array($data) ? ($data['response']['rows'][0] ?? null) : null;
+    if (!is_array($row)) {
+        return 0;
+    }
+
+    $content = is_array($row['content'] ?? null) ? $row['content'] : [];
+    $descriptive = is_array($content['descriptiveNonRepeating'] ?? null) ? $content['descriptiveNonRepeating'] : [];
+    $indexed = is_array($content['indexedStructured'] ?? null) ? $content['indexedStructured'] : [];
+    $title = first_text_value($descriptive['title'] ?? $row['title'] ?? null);
+    if ($title === '') {
+        return 0;
+    }
+
+    $onlineMedia = $descriptive['online_media']['media'][0] ?? [];
+    $imageUrl = is_array($onlineMedia) ? first_text_value($onlineMedia['content'] ?? $onlineMedia['thumbnail'] ?? null) : '';
+    $description = first_text_value($descriptive['notes'][0]['content'] ?? $descriptive['record_link'] ?? null);
+
+    save_event_enrichment((int) $event['id'], [
+        'source' => 'Smithsonian Open Access',
+        'role' => 'museum',
+        'title' => $title,
+        'description' => $description,
+        'source_url' => first_text_value($descriptive['record_link'] ?? null),
+        'image_url' => $imageUrl ?: null,
+        'license_label' => first_text_value($descriptive['usage_flag'] ?? null) ?: first_text_value($indexed['usage_flag'] ?? null),
+        'external_id' => first_text_value($row['id'] ?? null) ?: normalize_context_key($title),
+        'metadata' => $row,
+    ]);
+
+    return 1;
+}
+
+function enrich_event_from_dpla(array $event, array $settings): int
+{
+    $query = event_search_query($event);
+    $url = ($settings['url'] ?? 'https://api.dp.la/v2/items') . '?' . http_build_query([
+        'api_key' => $settings['api_key'] ?? '',
+        'q' => $query,
+        'page_size' => 1,
+    ]);
+    $body = http_get_json($url, historical_user_agent());
+    $data = $body ? json_decode($body, true) : null;
+    $item = is_array($data) ? ($data['docs'][0] ?? null) : null;
+    if (!is_array($item)) {
+        return 0;
+    }
+
+    $resource = is_array($item['sourceResource'] ?? null) ? $item['sourceResource'] : [];
+    $title = first_text_value($resource['title'] ?? $item['title'] ?? null);
+    if ($title === '') {
+        return 0;
+    }
+
+    save_event_enrichment((int) $event['id'], [
+        'source' => 'DPLA / National Archives',
+        'role' => 'archive',
+        'title' => $title,
+        'description' => first_text_value($resource['description'] ?? null),
+        'source_url' => first_text_value($item['isShownAt'] ?? $item['@id'] ?? null),
+        'image_url' => first_text_value($item['object'] ?? null),
+        'license_label' => first_text_value($resource['rights'] ?? null),
+        'external_id' => first_text_value($item['id'] ?? $item['@id'] ?? null) ?: normalize_context_key($title),
+        'metadata' => $item,
+    ]);
+
+    return 1;
+}
+
 function enrich_event_from_openhistoricalmap(array $event, array $settings): int
 {
     $url = $settings['url'] . '?' . http_build_query(['q' => $event['region'] ?: event_search_query($event)]);
@@ -430,6 +545,26 @@ function wikidata_year_from_date(string $date): ?int
 function event_search_query(array $event): string
 {
     return trim((string) (($event['canonical_title'] ?? '') ?: ($event['title'] ?? '')));
+}
+
+function first_text_value($value): string
+{
+    if (is_array($value)) {
+        foreach ($value as $item) {
+            $text = first_text_value($item);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
+    }
+
+    if ($value === null) {
+        return '';
+    }
+
+    return clean_context_text((string) $value);
 }
 
 function historical_user_agent(): string

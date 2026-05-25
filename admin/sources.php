@@ -133,6 +133,7 @@ render_page_start('Fontes e coletas', 'sources', 'admin', 'Central de configura�
                         <th>Fonte</th>
                         <th>Entidade</th>
                         <th>Status</th>
+                        <th>Configuração</th>
                         <th>Dados obtidos</th>
                         <th>Processo</th>
                         <th>Destino</th>
@@ -143,7 +144,14 @@ render_page_start('Fontes e coletas', 'sources', 'admin', 'Central de configura�
                         <tr>
                             <td data-label="Fonte"><strong><?= h($source['name']) ?></strong><small><?= h($source['key']) ?></small></td>
                             <td data-label="Entidade"><?= h($source['entity']) ?></td>
-                            <td data-label="Status"><span class="status-badge <?= $source['enabled'] ? 'is-approved' : 'is-pending' ?>"><?= h($source['enabled'] ? 'Ativa' : 'Inativa') ?></span></td>
+                            <td data-label="Status"><span class="status-badge <?= h(source_status_class($source['status'])) ?>"><?= h($source['status']) ?></span></td>
+                            <td data-label="Configuração">
+                                <div class="source-checks">
+                                    <?php foreach ($source['checks'] as $check): ?>
+                                        <span class="status-badge <?= $check['ok'] ? 'is-approved' : 'is-pending' ?>"><?= h($check['label']) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </td>
                             <td data-label="Dados"><?= h($source['data']) ?></td>
                             <td data-label="Processo"><?= h($source['process']) ?></td>
                             <td data-label="Destino"><?= h($source['target']) ?></td>
@@ -163,19 +171,85 @@ function source_event_ids_for_day(int $month, int $day): array
     return array_map('intval', array_column($stmt->fetchAll(), 'id'));
 }
 
+function source_status_class(string $status): string
+{
+    return match ($status) {
+        'Ativa' => 'is-approved',
+        'Aguardando credencial', 'Aguardando endpoint' => 'is-pending',
+        default => 'is-rejected',
+    };
+}
+
+function source_status(bool $enabled, bool $configured, string $missingLabel = 'credencial'): string
+{
+    if ($enabled && $configured) {
+        return 'Ativa';
+    }
+
+    if ($enabled && !$configured) {
+        return $missingLabel === 'endpoint' ? 'Aguardando endpoint' : 'Aguardando credencial';
+    }
+
+    return 'Inativa';
+}
+
+function source_checks(bool $enabled, bool $credentialRequired, bool $hasCredential, bool $endpointRequired, bool $hasEndpoint): array
+{
+    $checks = [
+        ['label' => $enabled ? 'habilitada' : 'desativada', 'ok' => $enabled],
+    ];
+
+    if ($credentialRequired) {
+        $checks[] = ['label' => $hasCredential ? 'credencial ok' : 'sem credencial', 'ok' => $hasCredential];
+    } else {
+        $checks[] = ['label' => 'sem credencial', 'ok' => true];
+    }
+
+    if ($endpointRequired) {
+        $checks[] = ['label' => $hasEndpoint ? 'endpoint ok' : 'sem endpoint', 'ok' => $hasEndpoint];
+    } else {
+        $checks[] = ['label' => 'endpoint padrão', 'ok' => true];
+    }
+
+    $checks[] = ['label' => ($enabled && (!$credentialRequired || $hasCredential) && (!$endpointRequired || $hasEndpoint)) ? 'pronta' : 'pendente', 'ok' => $enabled && (!$credentialRequired || $hasCredential) && (!$endpointRequired || $hasEndpoint)];
+
+    return $checks;
+}
+
 function source_catalog(array $config): array
 {
     $historical = $config['historical'] ?? [];
     $wikimedia = $config['wikimedia'] ?? [];
     $news = $config['news'] ?? [];
     $trends = $config['trends'] ?? [];
+    $europeana = $historical['europeana'] ?? [];
+    $smithsonian = $historical['smithsonian'] ?? [];
+    $dpla = $historical['dpla'] ?? [];
+    $openHistoricalMap = $historical['openhistoricalmap'] ?? [];
+    $mediaCloud = $trends['media_cloud'] ?? [];
+    $wikidataEnabled = !empty($historical['enabled']) && !empty($historical['wikidata']['enabled']);
+    $wikimediaEnabled = !empty($wikimedia['enabled']);
+    $wikipediaEnabled = !empty($historical['wikipedia']['enabled']);
+    $commonsEnabled = !empty($historical['commons']['enabled']);
+    $locEnabled = !empty($historical['library_of_congress']['enabled']);
+    $europeanaEnabled = !empty($europeana['enabled']);
+    $smithsonianEnabled = !empty($smithsonian['enabled']);
+    $dplaEnabled = !empty($dpla['enabled']);
+    $ohmEnabled = !empty($openHistoricalMap['enabled']);
+    $newsEnabled = !empty($news['enabled']);
+    $gdeltEnabled = !empty($trends['enabled']) && !empty($trends['gdelt']['enabled']);
+    $mediaCloudEnabled = !empty($mediaCloud['enabled']);
+    $pageviewsEnabled = !empty($trends['enabled']) && !empty($trends['wikimedia_pageviews']['enabled']);
+    $agenciaEnabled = !empty($trends['enabled']) && !empty($trends['agencia_brasil']['enabled']);
+    $hackerNewsEnabled = !empty($trends['enabled']) && !empty($trends['hacker_news']['enabled']);
 
     return [
         [
             'key' => 'historical.wikidata',
             'name' => 'Wikidata',
             'entity' => 'Evento histórico',
-            'enabled' => !empty($historical['enabled']) && !empty($historical['wikidata']['enabled']),
+            'status' => source_status($wikidataEnabled, true),
+            'checks' => source_checks($wikidataEnabled, false, true, false, true),
             'data' => 'ID canônico, data, ano, tipo, local e artigo associado.',
             'process' => 'Consulta SPARQL por mês/dia e normalização canônica.',
             'target' => 'events, event_imports, event_sources, event_enrichments',
@@ -184,7 +258,8 @@ function source_catalog(array $config): array
             'key' => 'wikimedia.onthisday',
             'name' => 'Wikipedia / Wikimedia On This Day',
             'entity' => 'Evento histórico',
-            'enabled' => !empty($wikimedia['enabled']),
+            'status' => source_status($wikimediaEnabled, true),
+            'checks' => source_checks($wikimediaEnabled, false, true, false, true),
             'data' => 'Ano, descrição, página relacionada, idioma e tipo de efeméride.',
             'process' => 'Fallback quando Wikidata não retorna eventos.',
             'target' => 'events, event_imports, event_sources, event_enrichments',
@@ -193,7 +268,8 @@ function source_catalog(array $config): array
             'key' => 'historical.wikipedia',
             'name' => 'Wikipedia REST Summary',
             'entity' => 'Enriquecimento contextual',
-            'enabled' => !empty($historical['wikipedia']['enabled']),
+            'status' => source_status($wikipediaEnabled, true),
+            'checks' => source_checks($wikipediaEnabled, false, true, false, true),
             'data' => 'Resumo, URL canônica, thumbnail e metadados da página.',
             'process' => 'Enriquecimento a partir do artigo associado ao evento.',
             'target' => 'events.image_url, event_enrichments',
@@ -202,7 +278,8 @@ function source_catalog(array $config): array
             'key' => 'historical.commons',
             'name' => 'Wikimedia Commons',
             'entity' => 'Enriquecimento visual',
-            'enabled' => !empty($historical['commons']['enabled']),
+            'status' => source_status($commonsEnabled, true),
+            'checks' => source_checks($commonsEnabled, false, true, false, true),
             'data' => 'Imagem associada ao resumo Wikimedia e licença indicada.',
             'process' => 'Registro visual derivado do thumbnail da Wikipedia.',
             'target' => 'event_enrichments',
@@ -211,7 +288,8 @@ function source_catalog(array $config): array
             'key' => 'historical.library_of_congress',
             'name' => 'Library of Congress',
             'entity' => 'Enriquecimento documental',
-            'enabled' => !empty($historical['library_of_congress']['enabled']),
+            'status' => source_status($locEnabled, true),
+            'checks' => source_checks($locEnabled, false, true, false, true),
             'data' => 'Título, descrição/data, URL, imagem e direitos.',
             'process' => 'Busca por termo do evento e uso do primeiro resultado.',
             'target' => 'event_enrichments',
@@ -220,34 +298,38 @@ function source_catalog(array $config): array
             'key' => 'historical.europeana',
             'name' => 'Europeana',
             'entity' => 'Enriquecimento cultural',
-            'enabled' => !empty($historical['europeana']['enabled']) && !empty($historical['europeana']['api_key']),
+            'status' => source_status($europeanaEnabled, !empty($europeana['api_key'])),
+            'checks' => source_checks($europeanaEnabled, true, !empty($europeana['api_key']), false, true),
             'data' => 'Obras, objetos, descrição, preview, direitos e identificador.',
-            'process' => 'Busca simples com API key quando configurada.',
+            'process' => 'Busca cultural com parser específico para items, preview, direitos e identificador.',
             'target' => 'event_enrichments',
         ],
         [
             'key' => 'historical.smithsonian',
             'name' => 'Smithsonian Open Access',
             'entity' => 'Enriquecimento museológico',
-            'enabled' => !empty($historical['smithsonian']['enabled']) && !empty($historical['smithsonian']['api_key']),
+            'status' => source_status($smithsonianEnabled, !empty($smithsonian['api_key'])),
+            'checks' => source_checks($smithsonianEnabled, true, !empty($smithsonian['api_key']), false, true),
             'data' => 'Objetos, títulos, descrições, imagens e metadados.',
-            'process' => 'Busca simples com API key quando configurada.',
+            'process' => 'Busca museológica com parser específico para response.rows e descriptiveNonRepeating.',
             'target' => 'event_enrichments',
         ],
         [
             'key' => 'historical.dpla',
             'name' => 'DPLA / National Archives',
             'entity' => 'Enriquecimento arquivístico',
-            'enabled' => !empty($historical['dpla']['enabled']) && !empty($historical['dpla']['api_key']),
+            'status' => source_status($dplaEnabled, !empty($dpla['api_key'])),
+            'checks' => source_checks($dplaEnabled, true, !empty($dpla['api_key']), false, true),
             'data' => 'Itens arquivísticos, descrição, URL, imagem e direitos.',
-            'process' => 'Busca simples com API key quando configurada.',
+            'process' => 'Busca arquivística com parser específico para docs e sourceResource.',
             'target' => 'event_enrichments',
         ],
         [
             'key' => 'historical.openhistoricalmap',
             'name' => 'OpenHistoricalMap',
             'entity' => 'Enriquecimento geográfico',
-            'enabled' => !empty($historical['openhistoricalmap']['enabled']) && !empty($historical['openhistoricalmap']['url']),
+            'status' => source_status($ohmEnabled, !empty($openHistoricalMap['url']), 'endpoint'),
+            'checks' => source_checks($ohmEnabled, false, true, true, !empty($openHistoricalMap['url'])),
             'data' => 'Referência geográfica histórica e metadados retornados.',
             'process' => 'Busca por região ou termo do evento.',
             'target' => 'event_enrichments',
@@ -256,7 +338,8 @@ function source_catalog(array $config): array
             'key' => 'news.google_news_rss',
             'name' => 'Google News RSS',
             'entity' => 'Notícia',
-            'enabled' => !empty($news['enabled']) && !empty($news['feeds']),
+            'status' => source_status($newsEnabled, !empty($news['feeds']), 'endpoint'),
+            'checks' => source_checks($newsEnabled, false, true, true, !empty($news['feeds'])),
             'data' => 'Título, descrição, link e palavras-chave extraídas.',
             'process' => 'Leitura RSS de Brasil, Mundo e Tecnologia.',
             'target' => 'collected_contexts, current_topics',
@@ -265,7 +348,8 @@ function source_catalog(array $config): array
             'key' => 'trends.gdelt',
             'name' => 'GDELT Project',
             'entity' => 'Tendência',
-            'enabled' => !empty($trends['enabled']) && !empty($trends['gdelt']['enabled']),
+            'status' => source_status($gdeltEnabled, true),
+            'checks' => source_checks($gdeltEnabled, false, true, false, true),
             'data' => 'Artigos relevantes, domínio, URL e palavras-chave.',
             'process' => 'Consulta por data, query e relevância híbrida.',
             'target' => 'collected_contexts, current_topics',
@@ -274,7 +358,8 @@ function source_catalog(array $config): array
             'key' => 'trends.media_cloud',
             'name' => 'Media Cloud',
             'entity' => 'Tendência',
-            'enabled' => !empty($trends['media_cloud']['enabled']) && !empty($trends['media_cloud']['url']),
+            'status' => source_status($mediaCloudEnabled, !empty($mediaCloud['url']), 'endpoint'),
+            'checks' => source_checks($mediaCloudEnabled, !empty($mediaCloud['api_key']), !empty($mediaCloud['api_key']), true, !empty($mediaCloud['url'])),
             'data' => 'Stories/resultados, mídia, URL e palavras-chave.',
             'process' => 'Consulta externa quando URL/API estiver configurada.',
             'target' => 'collected_contexts, current_topics',
@@ -283,7 +368,8 @@ function source_catalog(array $config): array
             'key' => 'trends.wikimedia_pageviews',
             'name' => 'Wikimedia Pageviews',
             'entity' => 'Tendência',
-            'enabled' => !empty($trends['enabled']) && !empty($trends['wikimedia_pageviews']['enabled']),
+            'status' => source_status($pageviewsEnabled, true),
+            'checks' => source_checks($pageviewsEnabled, false, true, false, true),
             'data' => 'Páginas mais vistas, views, projeto e URL.',
             'process' => 'Top pageviews do dia anterior para projetos configurados.',
             'target' => 'collected_contexts, current_topics',
@@ -292,7 +378,8 @@ function source_catalog(array $config): array
             'key' => 'trends.agencia_brasil',
             'name' => 'Agência Brasil RSS',
             'entity' => 'Tendência/notícia pública',
-            'enabled' => !empty($trends['enabled']) && !empty($trends['agencia_brasil']['enabled']),
+            'status' => source_status($agenciaEnabled, true),
+            'checks' => source_checks($agenciaEnabled, false, true, false, true),
             'data' => 'Título, descrição, link e palavras-chave.',
             'process' => 'Leitura RSS com URL principal e fallback.',
             'target' => 'collected_contexts, current_topics',
@@ -301,7 +388,8 @@ function source_catalog(array $config): array
             'key' => 'trends.hacker_news',
             'name' => 'Hacker News API',
             'entity' => 'Tendência tecnológica',
-            'enabled' => !empty($trends['enabled']) && !empty($trends['hacker_news']['enabled']),
+            'status' => source_status($hackerNewsEnabled, true),
+            'checks' => source_checks($hackerNewsEnabled, false, true, false, true),
             'data' => 'Top stories, título, score, comentários e URL.',
             'process' => 'Busca lista de top stories e detalha cada item.',
             'target' => 'collected_contexts, current_topics',
