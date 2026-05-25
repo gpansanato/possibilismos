@@ -10,6 +10,9 @@ if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
 
 $message = null;
 $error = null;
+$processTitle = null;
+$processDescription = null;
+$processSteps = [];
 $config = require __DIR__ . '/../app/config.php';
 $sourceConfig = $config['sources'] ?? [];
 
@@ -23,9 +26,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $parts = date_parts_from_run_date($actionDate);
 
     try {
-        if ($action === 'collect_events') {
+        if ($action === 'process_events' || $action === 'collect_events') {
             $result = collect_historical_events_for_day($parts['month'], $parts['day'], $actionDate);
-            $message = $result['imported'] . ' eventos coletados e ' . $result['enriched'] . ' enriquecimentos salvos.';
+            $summary = historical_collection_summary_for_day($parts['month'], $parts['day']);
+            $imports = event_import_summary_for_date($actionDate);
+            $processTitle = 'Processamento 1: eventos históricos';
+            $processDescription = 'Coleta, normalização, deduplicação e enriquecimento dos fatos históricos da data selecionada.';
+            $processSteps = [
+                source_process_step('Coleta de eventos históricos', 'Fontes estruturais consultadas para identificar fatos associados ao dia.', $result['imported'] . ' eventos processados'),
+                source_process_step('Normalização e vínculo canônico', 'Registros importados foram tratados para evitar duplicidade e preservar origem, data, ano e chave canônica.', $imports['linked'] . ' imports vinculados'),
+                source_process_step('Enriquecimento integrado', 'Fontes de apoio adicionam resumo, imagem, documentos e materiais complementares quando disponíveis.', $summary['enriched'] . ' eventos enriquecidos; ' . $summary['enrichment_records'] . ' registros salvos'),
+            ];
+            $message = 'Processamento de eventos históricos concluído.';
         } elseif ($action === 'enrich_events') {
             $ids = source_event_ids_for_day($parts['month'], $parts['day']);
             $enriched = 0;
@@ -33,6 +45,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $enriched += enrich_historical_event($eventId);
             }
             $message = count($ids) . ' eventos processados para enriquecimento; ' . $enriched . ' registros salvos/atualizados.';
+        } elseif ($action === 'process_context') {
+            $news = collect_daily_news_topics($actionDate);
+            $trends = collect_daily_trend_topics($actionDate);
+            $topics = current_topics_count_for_date($actionDate);
+            $processTitle = 'Processamento 2: contexto do dia';
+            $processDescription = 'Coleta e higienização integrada de notícias e tendências usadas como insumos contextuais.';
+            $processSteps = [
+                source_process_step('Coleta de notícias', 'Feeds e fontes noticiosas configuradas foram lidos para persistir itens de contexto editorial.', count($news) . ' notícias persistidas'),
+                source_process_step('Coleta de tendências', 'Sinais de tendência foram coletados ou derivados das notícias quando a fonte externa não retornou itens.', count($trends) . ' tendências persistidas'),
+                source_process_step('Base higienizada de contexto', 'Itens coletados foram reconstruídos na base operacional usada pela priorização.', $topics . ' tópicos disponíveis'),
+            ];
+            $message = 'Processamento de contexto concluído.';
         } elseif ($action === 'collect_news') {
             $items = collect_daily_news_topics($actionDate);
             $message = count($items) . ' notícias persistidas/coletadas.';
@@ -43,8 +67,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $news = collect_daily_news_topics($actionDate);
             $trends = collect_daily_trend_topics($actionDate);
             $message = count($news) . ' notícias e ' . count($trends) . ' tendências persistidas/coletadas.';
-        } elseif ($action === 'prioritize_events') {
+        } elseif ($action === 'process_priority' || $action === 'prioritize_events') {
             $ranked = apply_daily_priority_score($actionDate);
+            $summary = historical_collection_summary_for_day($parts['month'], $parts['day']);
+            $contextTotal = collected_contexts_count_for_date($actionDate);
+            $topics = current_topics_count_for_date($actionDate);
+            $processTitle = 'Processamento 3: priorização de eventos';
+            $processDescription = 'Aplicação dos critérios editoriais sobre eventos históricos, notícias, tendências e tópicos de contexto.';
+            $processSteps = [
+                source_process_step('Leitura dos eventos históricos', 'Todos os eventos coletados para o dia foram considerados antes da ordenação editorial.', $summary['total'] . ' eventos avaliáveis'),
+                source_process_step('Carregamento do contexto do dia', 'Notícias, tendências e tópicos higienizados foram reunidos como sinais de apoio.', $contextTotal . ' contextos; ' . $topics . ' tópicos'),
+                source_process_step('Aplicação dos critérios de priorização', 'O sistema recalculou score, motivos e resumo contextual para apoiar a curadoria.', count($ranked) . ' rankings gerados'),
+            ];
             $message = count($ranked) . ' eventos priorizados para ' . $actionDate . '.';
         } elseif ($action === 'full_pipeline') {
             $events = collect_historical_events_for_day($parts['month'], $parts['day'], $actionDate);
@@ -91,14 +125,56 @@ render_page_start('Fontes e coletas', 'sources', 'admin', 'Central de configura�
         </div>
         <form class="actions" method="post">
             <input type="hidden" name="date" value="<?= h($date) ?>">
-            <button name="action" value="collect_events" type="submit">Coletar eventos históricos</button>
-            <button class="button-secondary" name="action" value="enrich_events" type="submit">Enriquecer eventos</button>
-            <button class="button-secondary" name="action" value="collect_news" type="submit">Coletar notícias</button>
-            <button class="button-secondary" name="action" value="collect_trends" type="submit">Coletar tendências</button>
-            <button class="button-secondary" name="action" value="collect_context" type="submit">Coletar contexto</button>
-            <button class="button-secondary" name="action" value="prioritize_events" type="submit">Priorizar eventos</button>
-            <button class="button-secondary" name="action" value="full_pipeline" type="submit">Executar fluxo completo</button>
+            <button name="action" value="process_events" type="submit">Processar eventos históricos</button>
+            <button class="button-secondary" name="action" value="process_context" type="submit">Processar contexto do dia</button>
+            <button class="button-secondary" name="action" value="process_priority" type="submit">Aplicar priorização</button>
         </form>
+    </section>
+
+    <section class="panel process-panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Acompanhamento</p>
+                <h2><?= h($processTitle ?: 'Fluxo operacional por etapas') ?></h2>
+                <p><?= h($processDescription ?: 'Selecione um dos três processamentos para acompanhar as etapas executadas para a data de referência.') ?></p>
+            </div>
+        </div>
+        <div class="process-steps">
+            <?php if ($processSteps): ?>
+                <?php foreach ($processSteps as $index => $step): ?>
+                    <article class="process-step is-done">
+                        <span class="process-step__index"><?= h((string) ($index + 1)) ?></span>
+                        <div>
+                            <h3><?= h($step['title']) ?></h3>
+                            <p><?= h($step['description']) ?></p>
+                            <strong><?= h($step['result']) ?></strong>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <article class="process-step">
+                    <span class="process-step__index">1</span>
+                    <div>
+                        <h3>Eventos históricos</h3>
+                        <p>Coleta, normalização e enriquecimento executados em um único processamento.</p>
+                    </div>
+                </article>
+                <article class="process-step">
+                    <span class="process-step__index">2</span>
+                    <div>
+                        <h3>Notícias e tendências</h3>
+                        <p>Coleta integrada da base de contexto usada como insumo editorial.</p>
+                    </div>
+                </article>
+                <article class="process-step">
+                    <span class="process-step__index">3</span>
+                    <div>
+                        <h3>Priorização</h3>
+                        <p>Aplicação dos critérios configurados para gerar ranking e justificativas.</p>
+                    </div>
+                </article>
+            <?php endif; ?>
+        </div>
     </section>
 
     <section class="feature-grid feature-grid--three">
@@ -169,6 +245,15 @@ function source_event_ids_for_day(int $month, int $day): array
     $stmt = db()->prepare('SELECT id FROM events WHERE event_month = ? AND event_day = ?');
     $stmt->execute([$month, $day]);
     return array_map('intval', array_column($stmt->fetchAll(), 'id'));
+}
+
+function source_process_step(string $title, string $description, string $result): array
+{
+    return [
+        'title' => $title,
+        'description' => $description,
+        'result' => $result,
+    ];
 }
 
 function source_status_class(string $status): string
