@@ -258,6 +258,13 @@ button:hover,
     border-color: var(--color-border-strong);
 }
 
+button:disabled,
+button.is-loading {
+    cursor: wait;
+    opacity: 0.62;
+    transform: none;
+}
+
 .button-primary {
     background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-secondary));
     border-color: transparent;
@@ -945,6 +952,28 @@ button:hover,
     gap: 12px;
 }
 
+.progress-meter {
+    overflow: hidden;
+    height: 10px;
+    margin: 14px 0 16px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.82);
+}
+
+.progress-meter span {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--color-accent-primary), var(--color-accent-secondary));
+    transition: width 500ms ease, background 250ms ease;
+}
+
+.progress-meter span.is-error {
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.9), rgba(248, 113, 113, 0.75));
+}
+
 .process-step {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -960,6 +989,16 @@ button:hover,
 .process-step.is-done {
     border-color: rgba(34, 197, 94, 0.24);
     background: linear-gradient(180deg, rgba(34, 197, 94, 0.08), rgba(15, 23, 42, 0.48));
+}
+
+.process-step.is-running {
+    border-color: rgba(59, 130, 246, 0.42);
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.16), rgba(15, 23, 42, 0.52));
+}
+
+.process-step.is-error {
+    border-color: rgba(239, 68, 68, 0.42);
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.14), rgba(15, 23, 42, 0.52));
 }
 
 .process-step__index {
@@ -992,6 +1031,38 @@ button:hover,
     margin-top: 12px;
     color: #bbf7d0;
     font-size: 13px;
+}
+
+.process-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.process-summary:empty {
+    display: none;
+}
+
+.process-summary div {
+    padding: 12px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.56);
+}
+
+.process-summary span {
+    display: block;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.process-summary strong {
+    display: block;
+    margin-top: 6px;
+    color: var(--color-text-primary);
+    font-size: 16px;
 }
 
 .admin-toolbar,
