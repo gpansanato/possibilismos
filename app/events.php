@@ -86,7 +86,8 @@ function published_rankings_search(string $runDate, string $category = '', strin
         array_push($params, $term, $term, $term, $term);
     }
 
-    $sql = 'SELECT r.*, e.year, e.title, e.description, e.category, e.region, e.source_url, e.image_url, e.canonical_id, e.canonical_source, e.enriched_at,
+    $sql = 'SELECT r.*, e.year, e.title, e.description, e.category, e.region, e.source_url, e.image_url, e.canonical_id, e.canonical_source,
+                e.wikidata_entities_json, e.wikidata_location_json, e.wikidata_relations_json, e.enriched_at,
                 COALESCE(en.enrichment_count, 0) AS enrichment_count
             FROM daily_rankings r
             JOIN events e ON e.id = r.event_id
@@ -158,7 +159,8 @@ function public_ranking_by_id(int $rankingId): ?array
 {
     $stmt = db()->prepare(
         'SELECT r.*, e.event_month, e.event_day, e.year, e.title, e.description, e.category, e.region, e.source_url, e.image_url,
-                e.canonical_id, e.canonical_source, e.review_status, e.base_score,
+                e.canonical_id, e.canonical_source, e.wikidata_entities_json, e.wikidata_location_json, e.wikidata_relations_json,
+                e.review_status, e.base_score,
                 COALESCE(en.enrichment_count, 0) AS enrichment_count
          FROM daily_rankings r
          JOIN events e ON e.id = r.event_id
@@ -347,4 +349,55 @@ function events_count_by_review_status(?int $month = null, ?int $day = null): ar
     }
 
     return $counts;
+}
+
+function event_structured_field(array $event, string $field): array
+{
+    $raw = $event[$field] ?? '';
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function event_structured_entities(array $event): array
+{
+    return event_structured_field($event, 'wikidata_entities_json');
+}
+
+function event_structured_location(array $event): array
+{
+    return event_structured_field($event, 'wikidata_location_json');
+}
+
+function event_structured_relations(array $event): array
+{
+    return event_structured_field($event, 'wikidata_relations_json');
+}
+
+function event_structured_tags(array $structured, string $key, int $limit = 6): array
+{
+    $items = $structured[$key] ?? [];
+    if (!is_array($items)) {
+        return [];
+    }
+
+    return array_slice(array_values(array_filter(array_unique(array_map('strval', $items)))), 0, $limit);
+}
+
+function event_structured_tags_html(string $label, array $items): string
+{
+    if (!$items) {
+        return '<p class="meta">' . h($label) . ': em validação.</p>';
+    }
+
+    $html = '<div class="meta"><strong>' . h($label) . '</strong>';
+    foreach ($items as $item) {
+        $html .= '<span>' . h($item) . '</span>';
+    }
+    $html .= '</div>';
+
+    return $html;
 }

@@ -128,6 +128,9 @@ render_page_start('Eventos históricos destacados', 'events', 'public', 'Fatos a
                     $contextCount = substr_count((string) $item['reasons'], 'conexão com');
                     $priorityLabel = public_priority_label((float) $item['score']);
                     $editorialReason = public_editorial_reason($item, $contextCount);
+                    $structuredEntities = event_structured_entities($item);
+                    $structuredLocation = event_structured_location($item);
+                    $eventTypes = event_structured_tags($structuredEntities, 'types', 2);
                     ?>
                     <article class="published-card">
                         <?php if ($item['image_url']): ?>
@@ -147,6 +150,8 @@ render_page_start('Eventos históricos destacados', 'events', 'public', 'Fatos a
                                 <span><?= h(public_display_label($item['category'])) ?></span>
                                 <?php if (trim((string) $item['region']) !== ''): ?><span><?= h(public_display_label($item['region'])) ?></span><?php endif; ?>
                                 <span><?= h((string) $item['enrichment_count']) ?> enriquecimentos</span>
+                                <?php foreach ($eventTypes as $type): ?><span><?= h($type) ?></span><?php endforeach; ?>
+                                <?php if (!empty($structuredLocation['country'])): ?><span><?= h((string) $structuredLocation['country']) ?></span><?php endif; ?>
                                 <?php if ($item['canonical_source']): ?><span><?= h($item['canonical_source']) ?></span><?php endif; ?>
                             </div>
                             <div class="published-card__actions">

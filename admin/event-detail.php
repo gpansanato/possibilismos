@@ -21,6 +21,9 @@ if (!$event) {
 $rankings = event_rankings((int) $event['id']);
 $ranking = latest_event_ranking((int) $event['id']);
 $enrichments = event_enrichments((int) $event['id']);
+$structuredEntities = event_structured_entities($event);
+$structuredLocation = event_structured_location($event);
+$structuredRelations = event_structured_relations($event);
 $currentPriority = $ranking ? (float) $ranking['score'] : 0.0;
 $returnTo = '/admin/event-detail.php?id=' . (int) $event['id'];
 $runDate = $ranking['run_date'] ?? today_key()['date'];
@@ -79,6 +82,9 @@ render_page_start('Dossiê editorial', 'events', 'admin', 'Evento histórico est
             <div><span class="eyebrow">Data de priorização</span><p><?= h($ranking['run_date'] ?? 'Sem priorização') ?></p></div>
             <div><span class="eyebrow">Categoria</span><p><?= h($event['category'] ?: 'Não informada') ?></p></div>
             <div><span class="eyebrow">Região</span><p><?= h($event['region'] ?: 'Não informada') ?></p></div>
+            <?php if (!empty($structuredLocation['country'])): ?>
+                <div><span class="eyebrow">País/localização</span><p><?= h((string) $structuredLocation['country']) ?></p></div>
+            <?php endif; ?>
             <div><span class="eyebrow">Origem inicial</span><p><?= h($event['canonical_source'] ?: 'Wikimedia') ?></p></div>
             <div><span class="eyebrow">ID canônico</span><p><?= h($event['canonical_id'] ?: 'Não informado') ?></p></div>
             <div><span class="eyebrow">Enriquecimento</span><p><?= $enrichments ? h(count($enrichments) . ' registros') : 'Pendente de enriquecimento' ?></p></div>
@@ -105,6 +111,41 @@ render_page_start('Dossiê editorial', 'events', 'admin', 'Evento histórico est
                 <p>Pendente de enriquecimento histórico. Esta seção está preparada para receber descrição contextual, entidades, acervos e fontes complementares.</p>
             <?php endif; ?>
         </article>
+    </section>
+
+    <section class="panel dossier-block">
+        <span class="badge">Estrutura Wikidata</span>
+        <h1>Entidades, localização e relações históricas</h1>
+        <?php if (!$structuredEntities && !$structuredLocation && !$structuredRelations): ?>
+            <p>Dados estruturados ainda não disponíveis. Execute uma nova coleta de eventos históricos para buscar participantes, localização e relações do Wikidata.</p>
+        <?php else: ?>
+            <div class="structured-grid">
+                <article>
+                    <h2>Entidades</h2>
+                    <?= event_structured_tags_html('Participantes', event_structured_tags($structuredEntities, 'participants')) ?>
+                    <?= event_structured_tags_html('Tipos', event_structured_tags($structuredEntities, 'types')) ?>
+                </article>
+                <article>
+                    <h2>Localização</h2>
+                    <dl class="structured-list">
+                        <?php foreach ([
+                            'Lugar' => $structuredLocation['place'] ?? '',
+                            'País' => $structuredLocation['country'] ?? '',
+                            'Região administrativa' => $structuredLocation['administrative_area'] ?? '',
+                            'Coordenadas' => $structuredLocation['coordinates'] ?? '',
+                        ] as $label => $value): ?>
+                            <?php if ($value !== ''): ?><dt><?= h($label) ?></dt><dd><?= h((string) $value) ?></dd><?php endif; ?>
+                        <?php endforeach; ?>
+                    </dl>
+                </article>
+                <article>
+                    <h2>Relações</h2>
+                    <?= event_structured_tags_html('Parte de', event_structured_tags($structuredRelations, 'part_of')) ?>
+                    <?= event_structured_tags_html('Causas', event_structured_tags($structuredRelations, 'causes')) ?>
+                    <?= event_structured_tags_html('Efeitos', event_structured_tags($structuredRelations, 'effects')) ?>
+                </article>
+            </div>
+        <?php endif; ?>
     </section>
 
     <section class="panel dossier-block">
@@ -291,7 +332,11 @@ render_page_start('Dossiê editorial', 'events', 'admin', 'Evento histórico est
 <?php
 function matched_contexts_for_editorial_dossier(array $event, string $runDate): array
 {
-    $eventText = normalize_score_text($event['title'] . ' ' . $event['description'] . ' ' . $event['category'] . ' ' . $event['region']);
+    $structuredText = '';
+    foreach (['wikidata_entities_json', 'wikidata_location_json', 'wikidata_relations_json'] as $field) {
+        $structuredText .= ' ' . json_encode(event_structured_field($event, $field), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    $eventText = normalize_score_text($event['title'] . ' ' . $event['description'] . ' ' . $event['category'] . ' ' . $event['region'] . ' ' . $structuredText);
     $matches = [];
 
     foreach (collected_contexts_for_date($runDate) as $context) {

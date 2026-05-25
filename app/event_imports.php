@@ -181,6 +181,9 @@ function upsert_canonical_event(array $event): int
 {
     $event['normalized_title'] = mb_substr(normalize_event_identity_text((string) ($event['title'] ?? '')), 0, 255, 'UTF-8');
     $event['event_key'] = build_event_key($event);
+    $event['wikidata_entities_json'] = event_structured_json($event['wikidata_entities_json'] ?? []);
+    $event['wikidata_location_json'] = event_structured_json($event['wikidata_location_json'] ?? []);
+    $event['wikidata_relations_json'] = event_structured_json($event['wikidata_relations_json'] ?? []);
     $existingId = find_existing_canonical_event($event);
 
     if ($existingId > 0) {
@@ -193,6 +196,9 @@ function upsert_canonical_event(array $event): int
                  canonical_id = COALESCE(canonical_id, ?),
                  canonical_source = COALESCE(canonical_source, ?),
                  canonical_title = COALESCE(canonical_title, ?),
+                 wikidata_entities_json = CASE WHEN ? <> "" THEN ? ELSE wikidata_entities_json END,
+                 wikidata_location_json = CASE WHEN ? <> "" THEN ? ELSE wikidata_location_json END,
+                 wikidata_relations_json = CASE WHEN ? <> "" THEN ? ELSE wikidata_relations_json END,
                  normalized_title = COALESCE(normalized_title, ?),
                  event_key = COALESCE(event_key, ?),
                  confidence_score = GREATEST(confidence_score, ?),
@@ -208,6 +214,12 @@ function upsert_canonical_event(array $event): int
             $event['canonical_id'],
             $event['canonical_source'],
             $event['canonical_title'],
+            $event['wikidata_entities_json'],
+            $event['wikidata_entities_json'],
+            $event['wikidata_location_json'],
+            $event['wikidata_location_json'],
+            $event['wikidata_relations_json'],
+            $event['wikidata_relations_json'],
             $event['normalized_title'],
             $event['event_key'],
             (float) ($event['confidence_score'] ?? 0),
@@ -220,9 +232,10 @@ function upsert_canonical_event(array $event): int
     $stmt = db()->prepare(
         'INSERT INTO events
          (event_key, event_month, event_day, year, title, normalized_title, description, category, region,
-          source_url, canonical_id, canonical_source, canonical_title, base_score, confidence_score,
+          source_url, canonical_id, canonical_source, canonical_title, wikidata_entities_json, wikidata_location_json,
+          wikidata_relations_json, base_score, confidence_score,
           review_status, active, created_at, first_seen_at, last_seen_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", 0, NOW(), NOW(), NOW(), NOW())'
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "pending", 0, NOW(), NOW(), NOW(), NOW())'
     );
     $stmt->execute([
         $event['event_key'],
@@ -238,6 +251,9 @@ function upsert_canonical_event(array $event): int
         $event['canonical_id'],
         $event['canonical_source'],
         $event['canonical_title'],
+        $event['wikidata_entities_json'],
+        $event['wikidata_location_json'],
+        $event['wikidata_relations_json'],
         (float) ($event['base_score'] ?? 0),
         (float) ($event['confidence_score'] ?? 0),
     ]);
@@ -263,6 +279,19 @@ function persist_normalized_historical_event(array $event, array $source, array 
     save_event_import($import);
 
     return $eventId;
+}
+
+function event_structured_json($value): string
+{
+    if (is_string($value)) {
+        return $value;
+    }
+
+    if (!is_array($value) || $value === []) {
+        return '';
+    }
+
+    return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
 }
 
 function event_import_summary_for_date(string $runDate): array

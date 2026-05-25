@@ -276,3 +276,17 @@ function ensure_event_import_pipeline_schema(): void
 
     $checked = true;
 }
+
+function ensure_event_structured_context_schema(): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    db_add_column_if_missing('events', 'wikidata_entities_json', 'wikidata_entities_json TEXT NULL AFTER canonical_title');
+    db_add_column_if_missing('events', 'wikidata_location_json', 'wikidata_location_json TEXT NULL AFTER wikidata_entities_json');
+    db_add_column_if_missing('events', 'wikidata_relations_json', 'wikidata_relations_json TEXT NULL AFTER wikidata_location_json');
+
+    $checked = true;
+}

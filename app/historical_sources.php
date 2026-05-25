@@ -36,17 +36,31 @@ function fetch_wikidata_events_for_day(int $month, int $day, array $settings): a
 {
     $endpoint = $settings['wikidata']['endpoint'] ?? 'https://query.wikidata.org/sparql';
     $query = '
-SELECT ?item ?itemLabel ?date ?typeLabel ?placeLabel ?article WHERE {
+SELECT ?item ?itemLabel ?date
+       (GROUP_CONCAT(DISTINCT ?typeLabel; separator="|") AS ?typeLabels)
+       (GROUP_CONCAT(DISTINCT ?participantLabel; separator="|") AS ?participantLabels)
+       (GROUP_CONCAT(DISTINCT ?partOfLabel; separator="|") AS ?partOfLabels)
+       (GROUP_CONCAT(DISTINCT ?causeLabel; separator="|") AS ?causeLabels)
+       (GROUP_CONCAT(DISTINCT ?effectLabel; separator="|") AS ?effectLabels)
+       ?placeLabel ?coord ?countryLabel ?adminLabel ?article WHERE {
   ?item wdt:P585 ?date.
   FILTER(MONTH(?date) = ' . (int) $month . ' && DAY(?date) = ' . (int) $day . ')
   OPTIONAL { ?item wdt:P31 ?type. }
   OPTIONAL { ?item wdt:P276 ?place. }
+  OPTIONAL { ?place wdt:P625 ?coord. }
+  OPTIONAL { ?place wdt:P17 ?country. }
+  OPTIONAL { ?place wdt:P131 ?admin. }
+  OPTIONAL { ?item wdt:P710 ?participant. }
+  OPTIONAL { ?item wdt:P361 ?partOf. }
+  OPTIONAL { ?item wdt:P828 ?cause. }
+  OPTIONAL { ?item wdt:P1542 ?effect. }
   OPTIONAL {
     ?article schema:about ?item;
              schema:isPartOf <https://en.wikipedia.org/>.
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "pt,en". }
 }
+GROUP BY ?item ?itemLabel ?date ?placeLabel ?coord ?countryLabel ?adminLabel ?article
 LIMIT ' . (int) ($settings['max_import'] ?? 35);
 
     $url = $endpoint . '?' . http_build_query([
@@ -74,8 +88,11 @@ function save_wikidata_historical_event(array $row, int $month, int $day, ?strin
 
     $title = make_event_title($label, $year);
     $year = normalize_event_year_from_text($label, $year);
-    $type = clean_context_text($row['typeLabel']['value'] ?? '');
+    $type = implode(', ', wikidata_binding_list($row, 'typeLabels'));
     $place = clean_context_text($row['placeLabel']['value'] ?? '');
+    $entities = wikidata_event_entities($row);
+    $location = wikidata_event_location($row, $place);
+    $relations = wikidata_event_relations($row);
     $description = $label;
     if ($type !== '') {
         $description .= ' Tipo: ' . $type . '.';
@@ -96,6 +113,9 @@ function save_wikidata_historical_event(array $row, int $month, int $day, ?strin
         'canonical_id' => $wikidataId,
         'canonical_source' => 'Wikidata',
         'canonical_title' => $label,
+        'wikidata_entities_json' => $entities,
+        'wikidata_location_json' => $location,
+        'wikidata_relations_json' => $relations,
         'base_score' => 0.00,
         'confidence_score' => 0.95,
     ];
@@ -143,6 +163,46 @@ function save_wikidata_historical_event(array $row, int $month, int $day, ?strin
     ]);
 
     return $eventId;
+}
+
+function wikidata_binding_list(array $row, string $key): array
+{
+    $value = clean_context_text($row[$key]['value'] ?? '');
+    if ($value === '') {
+        return [];
+    }
+
+    return array_values(array_filter(array_unique(array_map(
+        static fn($item) => clean_context_text($item),
+        explode('|', $value)
+    ))));
+}
+
+function wikidata_event_entities(array $row): array
+{
+    return [
+        'participants' => wikidata_binding_list($row, 'participantLabels'),
+        'types' => wikidata_binding_list($row, 'typeLabels'),
+    ];
+}
+
+function wikidata_event_location(array $row, string $place): array
+{
+    return array_filter([
+        'place' => $place,
+        'country' => clean_context_text($row['countryLabel']['value'] ?? ''),
+        'administrative_area' => clean_context_text($row['adminLabel']['value'] ?? ''),
+        'coordinates' => clean_context_text($row['coord']['value'] ?? ''),
+    ], static fn($value) => $value !== '' && $value !== []);
+}
+
+function wikidata_event_relations(array $row): array
+{
+    return [
+        'part_of' => wikidata_binding_list($row, 'partOfLabels'),
+        'causes' => wikidata_binding_list($row, 'causeLabels'),
+        'effects' => wikidata_binding_list($row, 'effectLabels'),
+    ];
 }
 
 function import_historical_events_from_wikimedia(int $month, int $day, int $maxImport, ?string $runDate = null): int
