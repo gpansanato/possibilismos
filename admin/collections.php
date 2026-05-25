@@ -17,7 +17,7 @@ $processSummary = [];
 $isAsyncRequest = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $isAsyncRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+    $isAsyncRequest = ($_POST['async'] ?? '') === '1' || ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
     $action = $_POST['action'] ?? '';
     $actionDate = $_POST['date'] ?? $date;
     if (!is_string($actionDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $actionDate)) {
@@ -367,6 +367,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
 
             const formData = new FormData(form);
             formData.set(submitter.name, submitter.value);
+            formData.set('async', '1');
 
             try {
                 const response = await fetch(form.action || window.location.href, {
@@ -377,6 +378,10 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                         'Accept': 'application/json'
                     }
                 });
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('Resposta inesperada do servidor. Recarregue a pagina e tente novamente.');
+                }
                 const payload = await response.json();
                 finishVisualProgress(payload);
             } catch (error) {
