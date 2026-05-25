@@ -118,6 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $rankingCount = rankings_count_for_date($date);
         $collectionRows = collection_status_rows($date, $eventCounts, $historicalSummary, $importSummary, $newsCount, $trendCount, $topicsCount, $rankingCount);
 
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'ok' => $error === null,
@@ -143,28 +146,26 @@ $topicsCount = current_topics_count_for_date($date);
 $rankingCount = rankings_count_for_date($date);
 
 $collectionRows = collection_status_rows($date, $eventCounts, $historicalSummary, $importSummary, $newsCount, $trendCount, $topicsCount, $rankingCount);
+$collectionFlowSteps = collection_flow_steps();
 
 render_page_start('Coletas', 'collections', 'admin', 'Home operacional para executar e acompanhar os processamentos por data.');
 ?>
     <?php if ($error): ?><section class="empty"><p><?= h($error) ?></p></section><?php endif; ?>
     <?php if ($message): ?><section class="panel"><p><?= h($message) ?></p></section><?php endif; ?>
 
-    <section class="panel">
+    <section class="panel collection-command-panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Processamentos</p>
+                <h2>Executar fluxo operacional</h2>
+                <p>Defina a data de referencia e execute uma das tres etapas operacionais. A configuracao das fontes fica separada na tela Fontes.</p>
+            </div>
+        </div>
         <form class="date-filter" method="get">
             <label>Data de referencia <input type="date" name="date" value="<?= h($date) ?>"></label>
             <button type="submit">Ver status</button>
             <a class="button button-secondary" href="/admin/collections.php">Hoje</a>
         </form>
-    </section>
-
-    <section class="panel">
-        <div class="section-heading">
-            <div>
-                <p class="eyebrow">Processamentos</p>
-                <h2>Executar fluxo operacional</h2>
-                <p>Escolha uma das tres etapas para a data selecionada. A configuracao das fontes fica separada na tela Fontes.</p>
-            </div>
-        </div>
         <form class="actions" method="post" id="collection-process-form">
             <input type="hidden" name="date" value="<?= h($date) ?>">
             <button name="action" value="process_events" type="submit" data-process-label="Processamento 1: eventos historicos">Processar eventos historicos</button>
@@ -184,40 +185,17 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         <div class="progress-meter" aria-hidden="true">
             <span id="collection-progress-bar" style="width: <?= $processSteps ? '100' : '0' ?>%"></span>
         </div>
-        <div class="process-steps" id="collection-progress-steps">
+        <div class="process-log" id="collection-progress-log">
             <?php if ($processSteps): ?>
                 <?php foreach ($processSteps as $index => $step): ?>
-                    <article class="process-step is-done">
-                        <span class="process-step__index"><?= h((string) ($index + 1)) ?></span>
-                        <div>
-                            <h3><?= h($step['title']) ?></h3>
-                            <p><?= h($step['description']) ?></p>
-                            <strong><?= h($step['result']) ?></strong>
-                        </div>
-                    </article>
+                    <div class="process-log__item is-done">
+                        <span>Concluido</span>
+                        <strong><?= h($step['title']) ?></strong>
+                        <p><?= h($step['description']) ?> <?= h($step['result']) ?></p>
+                    </div>
                 <?php endforeach; ?>
             <?php else: ?>
-                <article class="process-step">
-                    <span class="process-step__index">1</span>
-                    <div>
-                        <h3>Eventos historicos</h3>
-                        <p>Coleta, normalizacao e enriquecimento executados em um unico processamento.</p>
-                    </div>
-                </article>
-                <article class="process-step">
-                    <span class="process-step__index">2</span>
-                    <div>
-                        <h3>Noticias e tendencias</h3>
-                        <p>Coleta integrada da base de contexto usada como insumo editorial.</p>
-                    </div>
-                </article>
-                <article class="process-step">
-                    <span class="process-step__index">3</span>
-                    <div>
-                        <h3>Priorizacao</h3>
-                        <p>Aplicacao dos criterios configurados para gerar ranking e justificativas.</p>
-                    </div>
-                </article>
+                <p class="process-log__empty">Nenhum processamento em execucao. Ao iniciar um fluxo, as atualizacoes aparecerao aqui em ordem.</p>
             <?php endif; ?>
         </div>
         <div class="process-summary" id="collection-process-summary">
@@ -260,24 +238,16 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         const panel = document.getElementById('collection-progress-panel');
         const title = document.getElementById('collection-progress-title');
         const description = document.getElementById('collection-progress-description');
-        const stepsEl = document.getElementById('collection-progress-steps');
+        const logEl = document.getElementById('collection-progress-log');
         const summaryEl = document.getElementById('collection-process-summary');
         const progressBar = document.getElementById('collection-progress-bar');
         const statusRows = document.getElementById('collection-status-rows');
-        if (!form || !panel || !stepsEl || !progressBar) {
+        if (!form || !panel || !logEl || !progressBar) {
             return;
         }
 
-        const flowSteps = [
-            'Preparando execucao',
-            'Consultando fonte de dados',
-            'Recebendo registros',
-            'Validando registros',
-            'Verificando duplicidades',
-            'Salvando registros',
-            'Atualizando resumo da coleta',
-            'Finalizando execucao'
-        ];
+        const flowStepsByAction = <?= json_encode($collectionFlowSteps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        let currentFlowSteps = [];
         let timer = null;
         let currentStep = 0;
 
@@ -288,38 +258,42 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             });
         }
 
-        function renderSteps(activeIndex, statuses) {
-            stepsEl.innerHTML = flowSteps.map((label, index) => {
+        function renderLog(activeIndex, statuses) {
+            const steps = currentFlowSteps.length ? currentFlowSteps : ['Preparando execucao'];
+            logEl.innerHTML = steps.map((label, index) => {
                 const status = statuses[index] || (index < activeIndex ? 'done' : index === activeIndex ? 'running' : 'pending');
                 const statusLabel = status === 'done' ? 'Concluido' : status === 'running' ? 'Em execucao' : status === 'error' ? 'Erro' : 'Pendente';
-                return '<article class="process-step is-' + status + '">' +
-                    '<span class="process-step__index">' + (index + 1) + '</span>' +
-                    '<div><h3>' + escapeHtml(label) + '</h3><p>' + statusLabel + '</p></div>' +
-                    '</article>';
+                return '<div class="process-log__item is-' + status + '">' +
+                    '<span>' + statusLabel + '</span>' +
+                    '<strong>' + escapeHtml(label) + '</strong>' +
+                    '</div>';
             }).join('');
             const done = statuses.filter((status) => status === 'done').length;
-            const progress = Math.max(done, activeIndex) / flowSteps.length * 100;
+            const progress = Math.max(done, activeIndex + 1) / steps.length * 100;
             progressBar.style.width = Math.min(100, progress) + '%';
         }
 
-        function startVisualProgress(label) {
+        function startVisualProgress(label, action) {
             currentStep = 0;
+            currentFlowSteps = flowStepsByAction[action] || flowStepsByAction.default || ['Preparando execucao', 'Finalizando execucao'];
             title.textContent = label || 'Processamento em andamento';
             description.textContent = 'A execucao foi iniciada. Acompanhe as etapas enquanto o servidor processa a coleta.';
             summaryEl.innerHTML = '';
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            renderSteps(0, []);
+            renderLog(0, []);
             timer = window.setInterval(() => {
-                currentStep = Math.min(currentStep + 1, flowSteps.length - 2);
-                renderSteps(currentStep, []);
+                currentStep = Math.min(currentStep + 1, currentFlowSteps.length - 2);
+                renderLog(currentStep, []);
             }, 6500);
         }
 
         function finishVisualProgress(payload) {
             window.clearInterval(timer);
-            const statuses = flowSteps.map(() => payload.ok ? 'done' : 'pending');
+            const steps = currentFlowSteps.length ? currentFlowSteps : (payload.steps || []).map((step) => step.title);
+            currentFlowSteps = steps.length ? steps : ['Finalizando execucao'];
+            const statuses = currentFlowSteps.map(() => payload.ok ? 'done' : 'pending');
             if (!payload.ok) {
-                const errorIndex = Math.max(0, Math.min(currentStep, flowSteps.length - 1));
+                const errorIndex = Math.max(0, Math.min(currentStep, currentFlowSteps.length - 1));
                 for (let i = 0; i < errorIndex; i++) {
                     statuses[i] = 'done';
                 }
@@ -329,8 +303,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             description.textContent = payload.ok
                 ? (payload.description || payload.message || 'Execucao finalizada.')
                 : (payload.error || 'Nao foi possivel concluir o processamento.');
-            renderSteps(flowSteps.length, statuses);
-            progressBar.style.width = payload.ok ? '100%' : Math.max(12, currentStep / flowSteps.length * 100) + '%';
+            renderLog(currentFlowSteps.length, statuses);
+            progressBar.style.width = payload.ok ? '100%' : Math.max(12, currentStep / currentFlowSteps.length * 100) + '%';
             progressBar.classList.toggle('is-error', !payload.ok);
             renderSummary(payload.summary || {});
             if (payload.tableRows && statusRows) {
@@ -363,7 +337,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             event.preventDefault();
             setButtons(true);
             progressBar.classList.remove('is-error');
-            startVisualProgress(submitter.dataset.processLabel);
+            startVisualProgress(submitter.dataset.processLabel, submitter.value);
 
             const formData = new FormData(form);
             formData.set(submitter.name, submitter.value);
@@ -378,23 +352,33 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                         'Accept': 'application/json'
                     }
                 });
-                const contentType = response.headers.get('content-type') || '';
-                if (!contentType.includes('application/json')) {
-                    throw new Error('Resposta inesperada do servidor. Recarregue a pagina e tente novamente.');
-                }
-                const payload = await response.json();
+                const responseText = await response.text();
+                const payload = parseJsonResponse(responseText);
                 finishVisualProgress(payload);
             } catch (error) {
                 finishVisualProgress({
                     ok: false,
                     title: 'Falha de comunicacao',
-                    error: 'A execucao pode ter sido interrompida ou a resposta do servidor nao foi compreendida.',
+                    error: 'A execucao pode ter sido interrompida ou a resposta do servidor nao foi compreendida: ' + error.message,
                     summary: { 'Falhas': 1, 'Mensagem': error.message }
                 });
             } finally {
                 setButtons(false);
             }
         });
+
+        function parseJsonResponse(responseText) {
+            try {
+                return JSON.parse(responseText);
+            } catch (error) {
+                const start = responseText.indexOf('{');
+                const end = responseText.lastIndexOf('}');
+                if (start >= 0 && end > start) {
+                    return JSON.parse(responseText.slice(start, end + 1));
+                }
+                throw new Error(responseText.replace(/\s+/g, ' ').trim().slice(0, 180) || 'resposta vazia');
+            }
+        }
     })();
     </script>
 <?php render_page_end(); ?>
@@ -427,6 +411,51 @@ function collection_action_label(string $action): string
         'process_context' => 'Processamento 2: contexto do dia',
         'process_priority' => 'Processamento 3: priorizacao de eventos',
     ][$action] ?? 'Processamento operacional';
+}
+
+function collection_flow_steps(): array
+{
+    return [
+        'process_events' => [
+            'Preparar execucao para a data selecionada',
+            'Consultar Wikidata para eventos historicos do dia',
+            'Acionar apoio Wikimedia quando necessario',
+            'Normalizar titulo, data, ano, origem e chave canonica',
+            'Verificar duplicidades nos eventos e imports',
+            'Salvar ou atualizar eventos historicos coletados',
+            'Executar enriquecimento integrado nas fontes ativas',
+            'Atualizar resumo operacional da coleta',
+            'Finalizar execucao',
+        ],
+        'process_context' => [
+            'Preparar execucao para a data selecionada',
+            'Consultar feeds e APIs de noticias configuradas',
+            'Consultar fontes de tendencias configuradas',
+            'Derivar tendencias a partir das noticias quando necessario',
+            'Extrair e normalizar palavras-chave',
+            'Verificar duplicidades na base higienizada',
+            'Salvar noticias, tendencias e topicos operacionais',
+            'Atualizar resumo operacional do contexto',
+            'Finalizar execucao',
+        ],
+        'process_priority' => [
+            'Preparar execucao para a data selecionada',
+            'Carregar eventos historicos coletados',
+            'Carregar noticias, tendencias e topicos higienizados',
+            'Aplicar relevancia historica base',
+            'Calcular conexoes com noticias e tendencias',
+            'Aplicar bonus, categoria e diversidade',
+            'Salvar score, motivos e resumo contextual',
+            'Atualizar status da priorizacao',
+            'Finalizar execucao',
+        ],
+        'default' => [
+            'Preparar execucao',
+            'Executar processamento',
+            'Atualizar resumo operacional',
+            'Finalizar execucao',
+        ],
+    ];
 }
 
 function collection_status_rows(
