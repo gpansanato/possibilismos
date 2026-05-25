@@ -742,6 +742,10 @@ button:hover,
     overflow: hidden;
 }
 
+.context-public-card {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .published-card__media {
     display: block;
     min-height: 100%;

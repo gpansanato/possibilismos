@@ -17,6 +17,7 @@ function nav_items(string $area): array
     return [
         ['key' => 'home', 'label' => 'Início', 'href' => '/'],
         ['key' => 'events', 'label' => 'Eventos publicados', 'href' => '/eventos.php'],
+        ['key' => 'contexts', 'label' => 'Contextos coletados', 'href' => '/contextos.php'],
         ['key' => 'admin', 'label' => 'Admin', 'href' => '/admin/login.php'],
     ];
 }
@@ -81,6 +82,7 @@ function render_page_end(): void
             <nav aria-label="Links de rodapé">
                 <a href="/">Produto</a>
                 <a href="/eventos.php">Publicações</a>
+                <a href="/contextos.php">Contextos</a>
                 <a href="/admin/login.php">Admin</a>
                 <a href="/admin/db-check.php">Status</a>
             </nav>
