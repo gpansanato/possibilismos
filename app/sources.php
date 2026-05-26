@@ -152,7 +152,6 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
         'external_id' => $sourceEventId,
         'metadata' => $event,
     ]);
-    enrich_historical_event($eventId, ['article' => ['value' => $sourceUrl]]);
 
     return true;
 }

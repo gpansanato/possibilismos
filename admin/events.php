@@ -21,8 +21,8 @@ $allowedSorts = [
     'title_desc' => 'title DESC, year ASC',
     'category_asc' => 'category ASC, title ASC',
     'source_asc' => 'canonical_source ASC, title ASC',
-    'enrichment_desc' => 'enrichment_count DESC, title ASC',
-    'enrichment_asc' => 'enrichment_count ASC, title ASC',
+    'enrichment_desc' => 'enriched_at DESC, enrichment_count DESC, title ASC',
+    'enrichment_asc' => 'enriched_at ASC, enrichment_count ASC, title ASC',
     'priority_desc' => 'priority_score DESC, event_month ASC, event_day ASC, year ASC',
     'priority_asc' => 'priority_score ASC, event_month ASC, event_day ASC, year ASC',
     'status_asc' => 'review_status ASC, title ASC',
@@ -107,9 +107,9 @@ if ($day !== '') {
 }
 
 if ($enrichment === 'enriched') {
-    $where[] = 'EXISTS (SELECT 1 FROM event_enrichments enx WHERE enx.event_id = e.id)';
+    $where[] = 'e.enriched_at IS NOT NULL';
 } elseif ($enrichment === 'not_enriched') {
-    $where[] = 'NOT EXISTS (SELECT 1 FROM event_enrichments enx WHERE enx.event_id = e.id)';
+    $where[] = 'e.enriched_at IS NULL';
 } else {
     $enrichment = 'all';
 }
@@ -235,8 +235,8 @@ render_page_start('Eventos históricos', 'events', 'admin', 'Consulta, curadoria
                             <td data-label="Categoria"><?= h($event['category']) ?></td>
                             <td data-label="Origem"><?= h($event['canonical_source'] ?: 'Wikimedia') ?></td>
                             <td data-label="Enriquecido">
-                                <span class="status-badge <?= ((int) $event['enrichment_count']) > 0 ? 'is-approved' : 'is-pending' ?>">
-                                    <?= ((int) $event['enrichment_count']) > 0 ? 'Sim' : 'Não' ?>
+                                <span class="status-badge <?= !empty($event['enriched_at']) ? 'is-approved' : 'is-pending' ?>">
+                                    <?= !empty($event['enriched_at']) ? 'Sim' : 'Não' ?>
                                 </span>
                                 <small><?= h((string) $event['enrichment_count']) ?></small>
                             </td>

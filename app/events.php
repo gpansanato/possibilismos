@@ -268,8 +268,8 @@ function historical_collection_summary_for_day(int $month, int $day): array
             COALESCE(SUM(e.review_status = "rejected"), 0) AS rejected,
             COALESCE(SUM(e.canonical_id IS NOT NULL AND e.canonical_id <> ""), 0) AS canonical,
             COALESCE(SUM(e.image_url IS NOT NULL AND e.image_url <> ""), 0) AS with_image,
-            COALESCE(SUM(COALESCE(en.enrichment_count, 0) > 0), 0) AS enriched,
-            COALESCE(SUM(COALESCE(en.enrichment_count, 0) = 0), 0) AS not_enriched,
+            COALESCE(SUM(e.enriched_at IS NOT NULL), 0) AS enriched,
+            COALESCE(SUM(e.enriched_at IS NULL), 0) AS not_enriched,
             COALESCE(SUM(COALESCE(en.enrichment_count, 0)), 0) AS enrichment_records
          FROM events e
          LEFT JOIN (

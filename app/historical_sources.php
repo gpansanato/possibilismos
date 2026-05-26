@@ -9,7 +9,7 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     $maxTotal = $maxImport + (int) ($wikimediaSettings['max_import'] ?? 30);
     $maxCollectors = max(1, (int) ($settings['max_collectors_per_run'] ?? 6));
     $maxDuration = max(20, (int) ($settings['max_duration_seconds'] ?? 120));
-    $maxEnrichDuringCollection = max(0, (int) ($settings['max_enrich_during_collection'] ?? 6));
+    $maxEnrichDuringCollection = max(0, (int) ($settings['max_enrich_during_collection'] ?? 0));
     $imported = 0;
     $enriched = 0;
     $found = 0;
@@ -48,7 +48,7 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
                 if ($eventId > 0) {
                     $imported++;
                     $variantImported++;
-                    if ($enriched < $maxEnrichDuringCollection) {
+                    if ($maxEnrichDuringCollection > 0 && $enriched < $maxEnrichDuringCollection) {
                         $savedEnrichments = enrich_historical_event($eventId, $candidate['payload'] ?? [], ['light']);
                         $enriched += $savedEnrichments;
                         $variantEnriched += $savedEnrichments;
@@ -85,6 +85,63 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
         'halted_by_budget' => $haltedByBudget,
         'duration' => round(max(0, microtime(true) - $started), 2),
         'collectors' => $collectorStats,
+    ];
+}
+
+function enrich_historical_events_for_day(int $month, int $day, ?int $limit = null): array
+{
+    $config = require __DIR__ . '/config.php';
+    $settings = $config['sources']['historical'] ?? [];
+    $limit = $limit ?: max(1, (int) ($settings['max_enrich_events_per_run'] ?? 8));
+    $started = microtime(true);
+    $evaluated = 0;
+    $enrichedEvents = 0;
+    $savedEnrichments = 0;
+    $withoutResults = 0;
+    $failures = 0;
+
+    $stmt = db()->prepare(
+        'SELECT e.*,
+                COALESCE(en.enrichment_count, 0) AS enrichment_count
+         FROM events e
+         LEFT JOIN (
+            SELECT event_id, COUNT(*) AS enrichment_count
+            FROM event_enrichments
+            GROUP BY event_id
+         ) en ON en.event_id = e.id
+         WHERE e.event_month = ? AND e.event_day = ?
+         ORDER BY
+            CASE WHEN e.enriched_at IS NULL THEN 0 ELSE 1 END,
+            COALESCE(en.enrichment_count, 0) ASC,
+            e.id ASC
+         LIMIT ' . (int) $limit
+    );
+    $stmt->execute([$month, $day]);
+    $events = $stmt->fetchAll();
+
+    foreach ($events as $event) {
+        $evaluated++;
+        try {
+            $saved = enrich_historical_event((int) $event['id'], [], ['light']);
+            if ($saved > 0) {
+                $enrichedEvents++;
+                $savedEnrichments += $saved;
+            } else {
+                $withoutResults++;
+            }
+        } catch (Throwable $e) {
+            $failures++;
+        }
+    }
+
+    return [
+        'evaluated' => $evaluated,
+        'enriched_events' => $enrichedEvents,
+        'saved_enrichments' => $savedEnrichments,
+        'without_results' => $withoutResults,
+        'failures' => $failures,
+        'limit' => $limit,
+        'duration' => round(max(0, microtime(true) - $started), 2),
     ];
 }
 
@@ -506,7 +563,7 @@ function enrich_historical_event(int $eventId, array $seed = [], ?array $enabled
 
 function historical_enrichment_groups(array $event, array $seed, array $settings): array
 {
-    $article = $seed['article']['value'] ?? '';
+    $article = historical_event_article_url($event, $seed);
 
     return [
         'light' => [
@@ -552,6 +609,39 @@ function historical_enrichment_groups(array $event, array $seed, array $settings
             'steps' => [],
         ],
     ];
+}
+
+function historical_event_article_url(array $event, array $seed): string
+{
+    $article = (string) ($seed['article']['value'] ?? '');
+    if ($article !== '') {
+        return $article;
+    }
+
+    $sourceUrl = (string) ($event['source_url'] ?? '');
+    if (strpos($sourceUrl, 'wikipedia.org/wiki/') !== false) {
+        return $sourceUrl;
+    }
+
+    $stmt = db()->prepare(
+        'SELECT metadata_json
+         FROM event_enrichments
+         WHERE event_id = ? AND source = "Wikidata"
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1'
+    );
+    $stmt->execute([(int) ($event['id'] ?? 0)]);
+    $metadata = $stmt->fetchColumn();
+    if (!is_string($metadata) || $metadata === '') {
+        return '';
+    }
+
+    $decoded = json_decode($metadata, true);
+    if (!is_array($decoded)) {
+        return '';
+    }
+
+    return (string) ($decoded['article']['value'] ?? '');
 }
 
 function enrich_event_from_wikipedia(array $event, string $articleUrl, array $settings): int
