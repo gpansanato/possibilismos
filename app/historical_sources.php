@@ -107,6 +107,94 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     ];
 }
 
+function collect_next_historical_event_connector(int $month, int $day, string $runDate): array
+{
+    $config = require __DIR__ . '/config.php';
+    $settings = $config['sources']['historical'] ?? [];
+    $wikimediaSettings = $config['sources']['wikimedia'] ?? [];
+    $collectors = historical_event_collectors($settings, $wikimediaSettings);
+    ensure_event_collector_statuses($runDate, $collectors);
+    $completedCollectors = completed_event_collectors_for_date($runDate);
+    $totalCollectors = count($collectors);
+
+    foreach ($collectors as $collector) {
+        if (isset($completedCollectors[collector_status_key($collector)])) {
+            continue;
+        }
+
+        return execute_historical_event_collector($collector, $month, $day, $runDate, $settings);
+    }
+
+    $summary = event_collector_status_summary($runDate);
+    return [
+        'done' => true,
+        'collector' => null,
+        'found' => 0,
+        'imported' => 0,
+        'enriched' => 0,
+        'failures' => 0,
+        'total_collectors' => $totalCollectors,
+        'completed_collectors' => (int) $summary['done'],
+        'pending_collectors' => (int) $summary['pending'],
+        'error_collectors' => (int) $summary['error'],
+    ];
+}
+
+function execute_historical_event_collector(array $collector, int $month, int $day, string $runDate, array $settings): array
+{
+    $config = require __DIR__ . '/config.php';
+    $maxEnrichDuringCollection = max(0, (int) (($config['sources']['historical'] ?? [])['max_enrich_during_collection'] ?? 0));
+    $started = microtime(true);
+    $found = 0;
+    $imported = 0;
+    $enriched = 0;
+    $failures = 0;
+
+    try {
+        mark_event_collector_status($runDate, $collector, 'running', 0, 0, 0, 'Coletor em execucao.');
+        $candidates = collect_historical_event_candidates($collector, $month, $day, $settings);
+        $found = count($candidates);
+
+        foreach ($candidates as $candidate) {
+            $eventId = persist_historical_event_candidate($candidate, $month, $day, $runDate);
+            if ($eventId > 0) {
+                $imported++;
+                if ($maxEnrichDuringCollection > 0 && $enriched < $maxEnrichDuringCollection) {
+                    $enrichmentResult = enrich_historical_event($eventId, $candidate['payload'] ?? [], ['light']);
+                    $enriched += (int) $enrichmentResult['saved'];
+                }
+            }
+        }
+
+        mark_event_collector_status($runDate, $collector, 'done', $found, $imported, $failures, 'Coletor concluido.');
+    } catch (Throwable $e) {
+        $failures++;
+        mark_event_collector_status($runDate, $collector, 'error', $found, $imported, $failures, $e->getMessage());
+    }
+
+    $summary = event_collector_status_summary($runDate);
+    return [
+        'done' => false,
+        'collector' => [
+            'source' => $collector['source'],
+            'source_variant' => $collector['source_variant'],
+            'label' => $collector['label'] ?? collector_label($collector),
+            'group_key' => $collector['group_key'] ?? 'other',
+            'group_label' => $collector['group_label'] ?? 'Outros coletores',
+            'group_description' => $collector['group_description'] ?? 'Coletores complementares.',
+        ],
+        'found' => $found,
+        'imported' => $imported,
+        'enriched' => $enriched,
+        'failures' => $failures,
+        'duration' => round(max(0, microtime(true) - $started), 2),
+        'total_collectors' => array_sum($summary),
+        'completed_collectors' => (int) $summary['done'],
+        'pending_collectors' => (int) $summary['pending'],
+        'error_collectors' => (int) $summary['error'],
+    ];
+}
+
 function collector_status_key(array $collector): string
 {
     return $collector['source'] . '|' . $collector['source_variant'];
@@ -140,7 +228,7 @@ function completed_event_collectors_for_date(string $runDate): array
     $stmt = db()->prepare(
         'SELECT source, source_variant
          FROM event_collector_statuses
-         WHERE run_date = ? AND status = "done"'
+         WHERE run_date = ? AND status IN ("done", "error", "skipped")'
     );
     $stmt->execute([$runDate]);
     $completed = [];

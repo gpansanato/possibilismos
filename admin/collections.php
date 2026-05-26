@@ -45,16 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'A fila de coletores da data foi reiniciada e a coleta foi executada novamente. O limite operacional considera apenas tempo de execucao.'
                 : 'Coleta, normalizacao e deduplicacao dos fatos historicos da data selecionada. O limite operacional considera apenas tempo de execucao; coletores ja concluidos sao pulados em novas execucoes.';
             $processSteps = [
-                collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fluxo iniciado.', '1 data processada'),
-                collection_process_step('Executar grupos de conectores historicos', 'Os conectores rodam em blocos funcionais de ate 6 fontes para facilitar leitura do progresso.', ($result['processed_collectors'] ?? 0) . ' conectores executados nesta execucao'),
+                collection_process_step('Execucao iniciada', 'A coleta historica foi iniciada para a data selecionada.', 'Data: ' . $actionDate . '; modo: ' . ($resetCollectors ? 'recoleta da data' : 'continuidade da fila')),
             ];
-            $processSteps = array_merge($processSteps, collection_event_collector_group_steps($result['collectors'] ?? []));
-            $processSteps[] = collection_process_step('Normalizar titulo, data, ano, origem e chave canonica', 'Registros tratados para preservar origem, data, ano e chave canonica antes da deduplicacao final.', $imports['linked'] . ' imports vinculados');
-            $processSteps[] = collection_process_step('Verificar duplicidades nos eventos e imports', 'Compara fonte, chave canonica, titulo, ano e data historica antes de gravar novos eventos.', $imports['ignored'] . ' registros ignorados por duplicidade');
-            $processSteps[] = collection_process_step('Salvar ou atualizar eventos historicos coletados', 'Eventos canonicos persistidos ou vinculados a imports existentes.', $summary['total'] . ' eventos historicos na base para o dia');
-            $processSteps[] = collection_process_step('Manter enriquecimento separado', 'A coleta preserva apenas eventos, imports e fontes. O enriquecimento passa a ser executado em processamento proprio.', $summary['not_enriched'] . ' eventos aguardando enriquecimento');
-            $processSteps[] = collection_process_step('Atualizar progresso dos coletores', 'A fila de coletores foi atualizada para permitir continuar a coleta em uma nova execucao.', ($result['completed_collectors'] ?? 0) . ' de ' . ($result['total_collectors'] ?? 0) . ' coletores concluidos');
-            $processSteps[] = collection_process_step('Finalizar execucao', 'Fecha a execucao sincrona e devolve o resumo consolidado para a interface.', $imports['errors'] . ' falhas registradas');
+            $processSteps = array_merge($processSteps, collection_event_collector_log_steps($result['collectors'] ?? []));
+            $processSteps[] = collection_process_step('Consolidacao da coleta', 'Os candidatos retornados pelos conectores foram normalizados, deduplicados e vinculados aos eventos canonicos durante a execucao.', $imports['linked'] . ' imports vinculados; ' . $imports['ignored'] . ' ignorados por duplicidade');
+            $processSteps[] = collection_process_step('Resumo da base do dia', 'A base de eventos historicos da data foi recalculada depois da coleta.', $summary['total'] . ' eventos historicos; ' . $summary['not_enriched'] . ' aguardando enriquecimento');
+            $processSteps[] = collection_process_step('Fila de conectores atualizada', 'O controle de coletores foi atualizado para permitir continuidade em nova execucao quando houver pendencias.', ($result['completed_collectors'] ?? 0) . ' de ' . ($result['total_collectors'] ?? 0) . ' conectores concluidos');
+            $processSteps[] = collection_process_step('Execucao finalizada', 'O servidor concluiu a rodada de coleta e devolveu o resumo para a interface.', $imports['errors'] . ' falhas registradas');
             $processSummary = collection_process_summary($startedAt, $startedLabel, [
                 'Encontrados' => $result['found'] ?? $result['imported'],
                 'Importados' => $result['imported'],
@@ -377,14 +374,20 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
 
         function startVisualProgress(label, action) {
             startedAt = Date.now();
-            const plannedSteps = flowStepsByAction[action] || flowStepsByAction.default || ['Preparando execucao', 'Finalizando execucao'];
+            const plannedSteps = action === 'process_events'
+                ? []
+                : (flowStepsByAction[action] || flowStepsByAction.default || ['Preparando execucao', 'Finalizando execucao']);
             currentFlowSteps = [{
-                title: 'Aguardando resposta do servidor',
-                description: 'A requisicao esta ativa. Sem streaming de etapas, a interface nao confirma conclusoes parciais antes do retorno final.',
+                title: action === 'process_events' ? 'Coleta em andamento' : 'Aguardando resposta do servidor',
+                description: action === 'process_events'
+                    ? 'O servidor esta executando os conectores historicos. O log com cada conector e suas quantidades aparecera assim que a rodada terminar.'
+                    : 'A requisicao esta ativa. Sem streaming de etapas, a interface nao confirma conclusoes parciais antes do retorno final.',
                 result: ''
             }].concat(plannedSteps);
             title.textContent = label || 'Processamento em andamento';
-            description.textContent = 'A execucao foi enviada ao servidor. As etapas abaixo so serao marcadas como concluidas quando o servidor devolver o resumo real do processamento.';
+            description.textContent = action === 'process_events'
+                ? 'A coleta foi iniciada. Enquanto a requisicao estiver ativa, acompanhe o tempo decorrido; os detalhes reais chegam no retorno do servidor.'
+                : 'A execucao foi enviada ao servidor. As etapas abaixo so serao marcadas como concluidas quando o servidor devolver o resumo real do processamento.';
             summaryEl.innerHTML = '';
             updateElapsed();
             progressStatus.textContent = 'Processamento em andamento';
@@ -417,6 +420,107 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             if (payload.date && statusDate) {
                 statusDate.textContent = payload.date;
             }
+        }
+
+        function renderProcessingRun(payload) {
+            title.textContent = payload.status === 'done' ? 'Coleta de eventos historicos concluida' : 'Coleta de eventos historicos em andamento';
+            description.textContent = payload.current_label || 'Executando conectores historicos da data selecionada.';
+            progressStatus.textContent = payload.status === 'done' ? 'Processamento concluido' : 'Processamento em andamento';
+            updateElapsed();
+
+            const logs = payload.logs || [];
+            logEl.innerHTML = logs.length ? logs.map((log) => {
+                const status = log.level === 'error' ? 'error' : log.level === 'success' ? 'done' : log.level === 'warning' ? 'running' : 'pending';
+                return '<div class="process-log__item is-' + status + '">' +
+                    '<span>' + escapeHtml(log.created_at || '') + '</span> ' +
+                    '<strong>' + escapeHtml(log.message || '') + '</strong>' +
+                    renderLogContext(log.context_json) +
+                    '</div>';
+            }).join('') : '<p class="process-log__empty">Preparando execucao da coleta historica.</p>';
+
+            renderSummary(payload.summary || {});
+            if (payload.status === 'done') {
+                progressBar.style.width = '100%';
+            } else {
+                progressBar.style.width = progressFromSummary(payload.summary || {});
+            }
+            progressBar.classList.toggle('is-error', payload.status === 'error');
+        }
+
+        function renderLogContext(contextJson) {
+            if (!contextJson) {
+                return '';
+            }
+            try {
+                const context = typeof contextJson === 'string' ? JSON.parse(contextJson) : contextJson;
+                const entries = Object.entries(context || {}).slice(0, 5);
+                if (!entries.length) {
+                    return '';
+                }
+                return '<p>' + entries.map(([key, value]) => escapeHtml(key + ': ' + String(value))).join(' | ') + '</p>';
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function progressFromSummary(summary) {
+            const value = String(summary['Conectores concluidos'] || '');
+            const match = value.match(/(\d+)\s+de\s+(\d+)/);
+            if (!match) {
+                return '18%';
+            }
+            const done = parseInt(match[1], 10);
+            const total = Math.max(1, parseInt(match[2], 10));
+            return Math.max(8, Math.min(96, Math.round(done / total * 100))) + '%';
+        }
+
+        async function runHistoricalEventsProcess(submitter) {
+            startedAt = Date.now();
+            title.textContent = submitter.dataset.processLabel || 'Coleta de eventos historicos';
+            description.textContent = 'Iniciando execucao dos conectores historicos. As notificacoes serao atualizadas a cada conector concluido.';
+            summaryEl.innerHTML = '';
+            progressBar.style.width = '8%';
+            progressStatus.textContent = 'Iniciando processamento';
+            logEl.innerHTML = '<div class="process-log__item is-running"><span>Iniciando:</span> <strong>Preparando execucao da coleta historica</strong><p>A data foi enviada ao servidor e a fila de conectores sera preparada.</p></div>';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            updateElapsed();
+            elapsedTimer = window.setInterval(updateElapsed, 1000);
+
+            const startData = new FormData();
+            startData.set('mode', 'start');
+            startData.set('date', dateInput && dateInput.value ? dateInput.value : processDate.value);
+            startData.set('reset_collectors', submitter.dataset.resetCollectors === '1' ? '1' : '0');
+            const startPayload = await postProcessRequest(startData);
+            renderProcessingRun(startPayload);
+
+            let payload = startPayload;
+            while (payload.status === 'running') {
+                const tickData = new FormData();
+                tickData.set('mode', 'tick');
+                tickData.set('run_id', payload.run_id);
+                payload = await postProcessRequest(tickData);
+                renderProcessingRun(payload);
+                await new Promise((resolve) => window.setTimeout(resolve, 350));
+            }
+
+            clearTimers();
+            setButtons(false);
+        }
+
+        async function postProcessRequest(formData) {
+            const response = await fetch('/admin/historical-events-process.php', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            });
+            const payload = parseJsonResponse(await response.text());
+            if (!payload.ok && payload.status === 'error') {
+                throw new Error(payload.error || 'Falha no processamento.');
+            }
+            return payload;
         }
 
         function clearTimers() {
@@ -472,6 +576,22 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             event.preventDefault();
             setButtons(true);
             progressBar.classList.remove('is-error');
+
+            if (submitter.value === 'process_events') {
+                try {
+                    await runHistoricalEventsProcess(submitter);
+                } catch (error) {
+                    finishVisualProgress({
+                        ok: false,
+                        title: 'Falha na coleta historica',
+                        error: error.message,
+                        summary: { 'Falhas': 1, 'Mensagem': error.message }
+                    });
+                    setButtons(false);
+                }
+                return;
+            }
+
             startVisualProgress(submitter.dataset.processLabel, submitter.value);
 
             if (resetCollectors) {
@@ -569,51 +689,34 @@ function collection_enrichment_source_stats_text(array $sourceStats): string
     return implode(' | ', $parts);
 }
 
-function collection_event_collector_group_steps(array $collectors): array
+function collection_event_collector_log_steps(array $collectors): array
 {
     if (!$collectors) {
         return [
-            collection_process_step('Conectores historicos', 'Nenhum conector novo foi executado nesta requisicao. A fila da data pode ja estar concluida; use Recoletar eventos do dia para reiniciar os coletores dessa data.', '0 conectores executados'),
+            collection_process_step('Nenhum conector executado', 'A fila da data pode ja estar concluida; use Recoletar eventos do dia para reiniciar os coletores dessa data.', '0 conectores executados nesta requisicao'),
         ];
     }
 
-    $groups = [];
-    foreach ($collectors as $collector) {
-        $key = $collector['group_key'] ?? 'other';
-        if (!isset($groups[$key])) {
-            $groups[$key] = [
-                'label' => $collector['group_label'] ?? 'Outros coletores',
-                'description' => $collector['group_description'] ?? 'Coletores complementares.',
-                'connectors' => 0,
-                'found' => 0,
-                'imported' => 0,
-                'enriched' => 0,
-                'failures' => 0,
-                'duration' => 0.0,
-                'labels' => [],
-            ];
-        }
-
-        $groups[$key]['connectors']++;
-        $groups[$key]['found'] += (int) ($collector['found'] ?? 0);
-        $groups[$key]['imported'] += (int) ($collector['imported'] ?? 0);
-        $groups[$key]['enriched'] += (int) ($collector['enriched'] ?? 0);
-        $groups[$key]['failures'] += (int) ($collector['failures'] ?? 0);
-        $groups[$key]['duration'] += (float) ($collector['duration'] ?? 0);
-        $groups[$key]['labels'][] = $collector['label'] ?? (($collector['source'] ?? '') . ' / ' . ($collector['source_variant'] ?? ''));
-    }
-
     $steps = [];
-    foreach ($groups as $group) {
+    foreach ($collectors as $collector) {
+        $label = $collector['label'] ?? (($collector['source'] ?? '') . ' / ' . ($collector['source_variant'] ?? ''));
+        $groupLabel = $collector['group_label'] ?? 'Conectores historicos';
+        $source = ($collector['source'] ?? '') . ' / ' . ($collector['source_variant'] ?? '');
+        $found = (int) ($collector['found'] ?? 0);
+        $imported = (int) ($collector['imported'] ?? 0);
+        $enriched = (int) ($collector['enriched'] ?? 0);
+        $failures = (int) ($collector['failures'] ?? 0);
+        $duration = number_format((float) ($collector['duration'] ?? 0), 1, ',', '.') . 's';
+
         $steps[] = collection_process_step(
-            $group['label'],
-            $group['description'] . ' Conectores: ' . implode(', ', array_slice($group['labels'], 0, 6)) . '.',
-            $group['connectors'] . ' conectores; ' .
-            $group['found'] . ' encontrados; ' .
-            $group['imported'] . ' importados; ' .
-            $group['enriched'] . ' enriquecimentos; ' .
-            $group['failures'] . ' falhas; ' .
-            number_format($group['duration'], 1, ',', '.') . 's'
+            'Inicio do conector: ' . $label,
+            'Grupo operacional: ' . $groupLabel . '. O conector foi colocado em execucao para recuperar candidatos da fonte externa.',
+            'Fonte: ' . $source
+        );
+        $steps[] = collection_process_step(
+            'Finalizacao do conector: ' . $label,
+            'Consulta, normalizacao e persistencia dos candidatos retornados por este conector foram encerradas.',
+            $found . ' encontrados; ' . $imported . ' importados ou vinculados; ' . $enriched . ' enriquecimentos; ' . $failures . ' falhas; duracao ' . $duration
         );
     }
 
@@ -634,17 +737,7 @@ function collection_flow_steps(): array
 {
     return [
         'process_events' => [
-            collection_process_step('Preparar coleta para a data selecionada', 'Valida a data, monta parametros da coleta e registra o inicio do fluxo.', 'Quantidade tratada: aguardando retorno do servidor.'),
-            collection_process_step('Nucleo canonico', 'Executa Wikidata por data pontual para obter a base estrutural mais confiavel.', 'Quantidade tratada: conector Wikidata principal.'),
-            collection_process_step('Curadoria Wikimedia', 'Executa efemerides selecionadas em pt, en e es como apoio editorial inicial.', 'Quantidade tratada: ate 3 conectores Wikimedia.'),
-            collection_process_step('Expansao temporal', 'Busca eventos por data de inicio e encerramento no Wikidata.', 'Quantidade tratada: ate 2 conectores Wikidata.'),
-            collection_process_step('Expansao tematica', 'Busca conflitos, politica, descobertas, invencoes, obras e publicacoes.', 'Quantidade tratada: ate 4 conectores Wikidata.'),
-            collection_process_step('Efemerides biograficas', 'Busca nascimentos e mortes relevantes em bloco separado.', 'Quantidade tratada: ate 2 conectores Wikidata.'),
-            collection_process_step('Wikimedia ampla', 'Executa eventos gerais do On This Day em pt, en e es ao final da coleta.', 'Quantidade tratada: ate 3 conectores Wikimedia.'),
-            collection_process_step('Normalizar, deduplicar e persistir eventos', 'Remove duplicidade textual, separa ano/data, prepara chave canonica e grava eventos/imports.', 'Quantidade tratada: novos, vinculados e ignorados por duplicidade.'),
-            collection_process_step('Separar enriquecimento para etapa propria', 'A coleta termina sem buscar resumos, imagens ou documentos complementares.', 'Quantidade tratada: eventos aguardando enriquecimento.'),
-            collection_process_step('Atualizar progresso dos coletores', 'Registra quais coletores foram concluidos e quais ainda precisam rodar em nova execucao.', 'Quantidade tratada: total consolidado para a data.'),
-            collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
+            collection_process_step('Coleta enviada ao servidor', 'A requisicao foi recebida. O servidor executara os conectores pendentes da data e retornara um log operacional ao final.', 'Aguardando retorno da execucao.'),
         ],
         'process_enrichment' => [
             collection_process_step('Preparar eventos para enriquecimento', 'Seleciona todos os eventos do dia para o tipo de enriquecimento escolhido.', 'Quantidade tratada: eventos avaliaveis.'),

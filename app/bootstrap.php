@@ -13,6 +13,7 @@ require_once __DIR__ . '/event_imports.php';
 require_once __DIR__ . '/historical_sources.php';
 require_once __DIR__ . '/sources.php';
 require_once __DIR__ . '/ranking.php';
+require_once __DIR__ . '/processing.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_name($config['admin']['session_name']);
@@ -25,5 +26,6 @@ ensure_collected_contexts_schema();
 ensure_event_enrichments_schema();
 ensure_event_enrichment_status_schema();
 ensure_event_collector_status_schema();
+ensure_processing_runs_schema();
 ensure_event_import_pipeline_schema();
 ensure_event_structured_context_schema();

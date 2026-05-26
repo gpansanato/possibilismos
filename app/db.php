@@ -233,6 +233,48 @@ function ensure_event_collector_status_schema(): void
     $checked = true;
 }
 
+function ensure_processing_runs_schema(): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS processing_runs (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            process_type VARCHAR(80) NOT NULL,
+            run_date DATE NOT NULL,
+            status ENUM("running", "done", "error") NOT NULL DEFAULT "running",
+            current_label VARCHAR(255) NULL,
+            summary_json TEXT NULL,
+            error_message TEXT NULL,
+            started_at DATETIME NOT NULL,
+            finished_at DATETIME NULL,
+            updated_at DATETIME NOT NULL,
+            INDEX idx_processing_runs_date_type (run_date, process_type),
+            INDEX idx_processing_runs_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS processing_run_logs (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            run_id INT UNSIGNED NOT NULL,
+            level ENUM("info", "success", "warning", "error") NOT NULL DEFAULT "info",
+            message VARCHAR(500) NOT NULL,
+            context_json TEXT NULL,
+            created_at DATETIME NOT NULL,
+            INDEX idx_processing_run_logs_run (run_id, id),
+            CONSTRAINT fk_processing_run_logs_run
+                FOREIGN KEY (run_id) REFERENCES processing_runs(id)
+                ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+
+    $checked = true;
+}
+
 function db_column_exists(string $table, string $column): bool
 {
     $stmt = db()->prepare('SHOW COLUMNS FROM ' . $table . ' LIKE ?');
