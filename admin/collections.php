@@ -69,27 +69,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $message = 'Processamento de eventos historicos concluido.';
         } elseif ($action === 'process_enrichment') {
+            $enrichmentGroup = normalize_historical_enrichment_group((string) ($_POST['enrichment_group'] ?? 'light'));
             $failedStep = 'Executando enriquecimento';
-            $result = enrich_historical_events_for_day($dateParts['month'], $dateParts['day']);
+            $result = enrich_historical_events_for_day($dateParts['month'], $dateParts['day'], $enrichmentGroup);
             $failedStep = 'Atualizando resumo da coleta';
             $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
             $processTitle = 'Processamento 2: enriquecimento de eventos';
-            $processDescription = 'Enriquecimento dos fatos historicos ja coletados, sem reexecutar a coleta principal.';
+            $processDescription = 'Enriquecimento coletivo dos fatos historicos da data, sem reexecutar a coleta principal. Tipo aplicado: ' . $result['group_label'] . '.';
             $processSteps = [
-                collection_process_step('Preparar eventos para enriquecimento', 'Seleciona eventos do dia com menor cobertura de enriquecimento.', $result['evaluated'] . ' eventos avaliados'),
-                collection_process_step('Executar enriquecimento leve', 'Busca resumo Wikipedia/Wikimedia e imagem associada quando ha artigo enciclopedico disponivel.', $result['saved_enrichments'] . ' enriquecimentos salvos'),
+                collection_process_step('Preparar eventos para enriquecimento', 'Seleciona todos os eventos historicos do dia para o tipo de enriquecimento solicitado.', $result['evaluated'] . ' eventos avaliados'),
+                collection_process_step('Verificar enriquecimentos existentes', 'Eventos ja cobertos por este tipo sao contabilizados sem nova chamada externa.', $result['already_enriched'] . ' eventos ja enriquecidos'),
+                collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado para todos os eventos elegiveis da data.', $result['saved_enrichments'] . ' enriquecimentos salvos'),
                 collection_process_step('Atualizar eventos enriquecidos', 'Marca eventos com enriquecimento salvo e preserva os que nao retornaram resultado.', $result['enriched_events'] . ' eventos enriquecidos'),
-                collection_process_step('Registrar itens sem resultado', 'Eventos sem fonte contextual suficiente permanecem disponiveis para nova tentativa futura.', $result['without_results'] . ' sem resultado nesta execucao'),
+                collection_process_step('Registrar itens sem fonte ou sem resultado', 'Eventos sem fonte suficiente ou sem retorno da fonte ficam disponiveis para nova tentativa futura.', $result['without_source'] . ' sem fonte; ' . $result['without_results'] . ' sem resultado'),
                 collection_process_step('Atualizar resumo operacional do enriquecimento', 'Contadores recalculados para a tabela de status.', $summary['enrichment_records'] . ' enriquecimentos totais'),
                 collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', $result['failures'] . ' falhas registradas'),
             ];
             $processSummary = collection_process_summary($startedAt, $startedLabel, [
+                'Tipo aplicado' => $result['group_label'],
                 'Eventos avaliados' => $result['evaluated'],
+                'Ja enriquecidos' => $result['already_enriched'],
                 'Eventos enriquecidos' => $result['enriched_events'],
                 'Enriquecimentos salvos' => $result['saved_enrichments'],
+                'Sem fonte suficiente' => $result['without_source'],
                 'Sem resultado' => $result['without_results'],
                 'Falhas' => $result['failures'],
-                'Limite por execucao' => $result['limit'],
             ]);
             $message = 'Processamento de enriquecimento concluido.';
         } elseif ($action === 'process_context') {
@@ -223,6 +227,13 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         </form>
         <form class="actions" method="post" id="collection-process-form" action="/admin/collections.php">
             <input type="hidden" name="date" id="collection-process-date" value="<?= h($date) ?>">
+            <label>Tipo de enriquecimento
+                <select name="enrichment_group">
+                    <?php foreach (historical_enrichment_group_labels() as $groupKey => $groupLabel): ?>
+                        <option value="<?= h($groupKey) ?>"><?= h($groupLabel) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
             <button name="action" value="process_events" type="submit" data-process-label="Processamento 1: eventos historicos">Processar eventos historicos</button>
             <button class="button-secondary" name="action" value="process_enrichment" type="submit" data-process-label="Processamento 2: enriquecimento de eventos">Enriquecer eventos</button>
             <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 3: contexto do dia">Processar contexto do dia</button>
@@ -543,10 +554,11 @@ function collection_flow_steps(): array
             collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
         ],
         'process_enrichment' => [
-            collection_process_step('Preparar eventos para enriquecimento', 'Seleciona eventos do dia com enriquecimento ausente ou parcial.', 'Quantidade tratada: eventos avaliaveis.'),
-            collection_process_step('Executar enriquecimento leve', 'Consulta Wikipedia/Wikimedia quando ha artigo associado ao evento.', 'Quantidade tratada: resumos e imagens encontrados.'),
-            collection_process_step('Salvar enriquecimentos obtidos', 'Persiste registros em event_enrichments e atualiza imagem/enriched_at quando aplicavel.', 'Quantidade tratada: enriquecimentos salvos.'),
-            collection_process_step('Registrar eventos sem resultado', 'Mantem eventos sem retorno disponiveis para nova tentativa.', 'Quantidade tratada: eventos sem enriquecimento.'),
+            collection_process_step('Preparar eventos para enriquecimento', 'Seleciona todos os eventos do dia para o tipo de enriquecimento escolhido.', 'Quantidade tratada: eventos avaliaveis.'),
+            collection_process_step('Verificar enriquecimentos existentes', 'Identifica eventos ja cobertos por esse tipo para evitar chamadas externas desnecessarias.', 'Quantidade tratada: eventos ja enriquecidos.'),
+            collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado: leve, documental, visual, geografico, academico ou completo.', 'Quantidade tratada: fontes consultadas.'),
+            collection_process_step('Salvar enriquecimentos obtidos', 'Persiste registros em event_enrichments e atualiza image_url/enriched_at quando aplicavel.', 'Quantidade tratada: enriquecimentos salvos.'),
+            collection_process_step('Registrar eventos sem fonte ou sem resultado', 'Mantem eventos sem retorno disponiveis para nova tentativa.', 'Quantidade tratada: eventos sem enriquecimento.'),
             collection_process_step('Atualizar resumo operacional do enriquecimento', 'Recalcula contadores de eventos enriquecidos e pendentes.', 'Quantidade tratada: totais consolidados.'),
             collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
         ],

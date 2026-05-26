@@ -956,6 +956,11 @@ button.is-loading {
     margin-top: 0;
 }
 
+.collection-command-panel .actions label {
+    min-width: 260px;
+    margin-right: 6px;
+}
+
 .process-steps {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

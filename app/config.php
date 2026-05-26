@@ -35,7 +35,6 @@ $config = [
             'max_collectors_per_run' => 6,
             'max_duration_seconds' => 120,
             'max_enrich_during_collection' => 0,
-            'max_enrich_events_per_run' => 8,
             'max_enrichments_per_source' => 1,
             'wikidata' => [
                 'enabled' => true,

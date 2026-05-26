@@ -296,11 +296,6 @@ render_page_start('Dossiê editorial', 'events', 'admin', 'Evento histórico est
                     <button class="danger" name="status" value="rejected" type="submit">Não publicar</button>
                 </form>
             <?php endif; ?>
-            <form class="actions actions-inline" method="post" action="/admin/enrich-event.php">
-                <input type="hidden" name="id" value="<?= h((string) $event['id']) ?>">
-                <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
-                <button class="button-secondary" type="submit">Enriquecer novamente</button>
-            </form>
             <a class="button button-secondary" href="/admin/events.php">Voltar para lista</a>
         </div>
     </section>

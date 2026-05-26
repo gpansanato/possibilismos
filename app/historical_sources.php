@@ -88,15 +88,38 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     ];
 }
 
-function enrich_historical_events_for_day(int $month, int $day, ?int $limit = null): array
+function historical_enrichment_group_labels(): array
 {
-    $config = require __DIR__ . '/config.php';
-    $settings = $config['sources']['historical'] ?? [];
-    $limit = $limit ?: max(1, (int) ($settings['max_enrich_events_per_run'] ?? 8));
+    return [
+        'light' => 'Leve: Wikipedia/Wikimedia',
+        'documental' => 'Documental: acervos e arquivos',
+        'visual' => 'Visual: imagens e museus',
+        'geographic' => 'Geografico: referencias territoriais',
+        'academic' => 'Academico: referencias de pesquisa',
+        'all' => 'Completo: todos os grupos ativos',
+    ];
+}
+
+function normalize_historical_enrichment_group(string $group): string
+{
+    return array_key_exists($group, historical_enrichment_group_labels()) ? $group : 'light';
+}
+
+function historical_enrichment_group_label(string $group): string
+{
+    $group = normalize_historical_enrichment_group($group);
+    return historical_enrichment_group_labels()[$group];
+}
+
+function enrich_historical_events_for_day(int $month, int $day, string $group = 'light'): array
+{
+    $group = normalize_historical_enrichment_group($group);
     $started = microtime(true);
     $evaluated = 0;
     $enrichedEvents = 0;
     $savedEnrichments = 0;
+    $alreadyEnriched = 0;
+    $withoutSource = 0;
     $withoutResults = 0;
     $failures = 0;
 
@@ -113,16 +136,26 @@ function enrich_historical_events_for_day(int $month, int $day, ?int $limit = nu
          ORDER BY
             CASE WHEN e.enriched_at IS NULL THEN 0 ELSE 1 END,
             COALESCE(en.enrichment_count, 0) ASC,
-            e.id ASC
-         LIMIT ' . (int) $limit
+            e.id ASC'
     );
     $stmt->execute([$month, $day]);
     $events = $stmt->fetchAll();
+    $enabledGroups = $group === 'all' ? null : [$group];
 
     foreach ($events as $event) {
         $evaluated++;
         try {
-            $saved = enrich_historical_event((int) $event['id'], [], ['light']);
+            if ($group !== 'all' && event_has_enrichment_group((int) $event['id'], $group)) {
+                $alreadyEnriched++;
+                continue;
+            }
+
+            if ($group === 'light' && historical_event_article_url($event, []) === '') {
+                $withoutSource++;
+                continue;
+            }
+
+            $saved = enrich_historical_event((int) $event['id'], [], $enabledGroups);
             if ($saved > 0) {
                 $enrichedEvents++;
                 $savedEnrichments += $saved;
@@ -138,11 +171,57 @@ function enrich_historical_events_for_day(int $month, int $day, ?int $limit = nu
         'evaluated' => $evaluated,
         'enriched_events' => $enrichedEvents,
         'saved_enrichments' => $savedEnrichments,
+        'already_enriched' => $alreadyEnriched,
+        'without_source' => $withoutSource,
         'without_results' => $withoutResults,
         'failures' => $failures,
-        'limit' => $limit,
+        'group' => $group,
+        'group_label' => historical_enrichment_group_label($group),
         'duration' => round(max(0, microtime(true) - $started), 2),
     ];
+}
+
+function event_has_enrichment_group(int $eventId, string $group): bool
+{
+    $groups = [
+        'light' => [
+            ['Wikipedia / Wikimedia', 'context'],
+            ['Wikimedia Commons', 'visual'],
+        ],
+        'documental' => [
+            ['Library of Congress', 'document'],
+            ['Europeana', 'cultural'],
+            ['DPLA / National Archives', 'archive'],
+        ],
+        'visual' => [
+            ['Smithsonian Open Access', 'museum'],
+        ],
+        'geographic' => [
+            ['OpenHistoricalMap', 'geo'],
+            ['OpenHistoricalMap', 'geographic'],
+        ],
+        'academic' => [],
+    ];
+
+    $pairs = $groups[$group] ?? [];
+    if (!$pairs) {
+        return false;
+    }
+
+    $clauses = [];
+    $params = [$eventId];
+    foreach ($pairs as $pair) {
+        $clauses[] = '(source = ? AND role = ?)';
+        $params[] = $pair[0];
+        $params[] = $pair[1];
+    }
+
+    $stmt = db()->prepare(
+        'SELECT 1 FROM event_enrichments WHERE event_id = ? AND (' . implode(' OR ', $clauses) . ') LIMIT 1'
+    );
+    $stmt->execute($params);
+
+    return (bool) $stmt->fetchColumn();
 }
 
 function historical_event_collectors(array $settings, array $wikimediaSettings): array
