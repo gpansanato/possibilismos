@@ -32,12 +32,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if ($action === 'process_events') {
             $failedStep = 'Consultando fonte de dados';
+            $resetCollectors = ($_POST['reset_collectors'] ?? '') === '1';
+            if ($resetCollectors) {
+                reset_event_collector_statuses_for_date($actionDate);
+            }
             $result = collect_historical_events_for_day($dateParts['month'], $dateParts['day'], $actionDate);
             $failedStep = 'Atualizando resumo da coleta';
             $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
             $imports = event_import_summary_for_date($actionDate);
             $processTitle = 'Coleta de eventos historicos';
-            $processDescription = 'Coleta, normalizacao e deduplicacao dos fatos historicos da data selecionada. O limite operacional considera apenas tempo de execucao; coletores ja concluidos sao pulados em novas execucoes.';
+            $processDescription = $resetCollectors
+                ? 'A fila de coletores da data foi reiniciada e a coleta foi executada novamente. O limite operacional considera apenas tempo de execucao.'
+                : 'Coleta, normalizacao e deduplicacao dos fatos historicos da data selecionada. O limite operacional considera apenas tempo de execucao; coletores ja concluidos sao pulados em novas execucoes.';
             $processSteps = [
                 collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fluxo iniciado.', '1 data processada'),
                 collection_process_step('Executar grupos de conectores historicos', 'Os conectores rodam em blocos funcionais de ate 6 fontes para facilitar leitura do progresso.', ($result['processed_collectors'] ?? 0) . ' conectores executados nesta execucao'),
@@ -63,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'Ainda falta coletar' => ($result['pending_collectors'] ?? 0) > 0 ? ($result['pending_collectors'] . ' coletores: ' . implode(', ', array_slice($result['pending_collector_labels'] ?? [], 0, 4))) : 'nenhum coletor pendente',
                 'Coletores com erro' => $result['error_collectors'] ?? 0,
                 'Limite operacional' => !empty($result['halted_by_budget']) ? 'tempo atingido (' . ($result['max_duration_seconds'] ?? 0) . 's); execute novamente para continuar a fila' : 'tempo nao atingido',
+                'Modo de execucao' => $resetCollectors ? 'fila reiniciada para a data' : 'continua apenas coletores pendentes',
             ]);
             $message = 'Coleta de eventos historicos concluida.';
         } elseif ($action === 'process_enrichment') {
@@ -234,9 +241,11 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             <input type="hidden" name="date" id="collection-process-date" value="<?= h($date) ?>">
             <div class="process-action-group">
             <button name="action" value="process_events" type="submit" data-process-label="Coleta de eventos historicos">Coletar eventos historicos</button>
+                <button class="button-secondary" name="action" value="process_events" type="submit" data-process-label="Recoleta de eventos historicos" data-reset-collectors="1">Recoletar eventos do dia</button>
                 <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 3: contexto do dia">Processar contexto do dia</button>
                 <button class="button-secondary" name="action" value="process_priority" type="submit" data-process-label="Processamento 4: priorizacao de eventos">Aplicar priorizacao</button>
             </div>
+            <input type="hidden" name="reset_collectors" value="0">
             <div class="enrichment-command">
                 <div>
                     <strong>Enriquecimento dos eventos historicos</strong>
@@ -331,6 +340,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         const statusDate = document.getElementById('collection-status-date');
         const dateInput = document.getElementById('collection-date-input');
         const processDate = document.getElementById('collection-process-date');
+        const resetCollectors = form.querySelector('[name="reset_collectors"]');
         if (!form || !panel || !logEl || !progressBar) {
             return;
         }
@@ -464,6 +474,9 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             progressBar.classList.remove('is-error');
             startVisualProgress(submitter.dataset.processLabel, submitter.value);
 
+            if (resetCollectors) {
+                resetCollectors.value = submitter.dataset.resetCollectors === '1' ? '1' : '0';
+            }
             const formData = new FormData(form);
             if (dateInput && processDate) {
                 processDate.value = dateInput.value || processDate.value;
@@ -560,7 +573,7 @@ function collection_event_collector_group_steps(array $collectors): array
 {
     if (!$collectors) {
         return [
-            collection_process_step('Conectores historicos', 'Nenhum conector novo foi executado nesta requisicao. Verifique se a fila ja estava concluida ou se o limite operacional foi atingido.', '0 conectores executados'),
+            collection_process_step('Conectores historicos', 'Nenhum conector novo foi executado nesta requisicao. A fila da data pode ja estar concluida; use Recoletar eventos do dia para reiniciar os coletores dessa data.', '0 conectores executados'),
         ];
     }
 
