@@ -309,8 +309,12 @@ function ensure_event_import_pipeline_schema(): void
     );
 
     db_add_column_if_missing('event_imports', 'source_variant', 'source_variant VARCHAR(120) NOT NULL DEFAULT "default" AFTER source');
+    db_add_index_if_missing('event_imports', 'idx_event_import_source_key', 'INDEX idx_event_import_source_key (source, normalized_key)');
+    db_add_index_if_missing('event_imports', 'idx_event_imports_run_date', 'INDEX idx_event_imports_run_date (run_date)');
+    db_add_index_if_missing('event_imports', 'idx_event_imports_canonical_event', 'INDEX idx_event_imports_canonical_event (canonical_event_id)');
     db_add_index_if_missing('event_imports', 'idx_event_imports_source_variant', 'INDEX idx_event_imports_source_variant (source, source_variant)');
     db_add_column_if_missing('event_sources', 'source_variant', 'source_variant VARCHAR(120) NOT NULL DEFAULT "default" AFTER source');
+    db_add_index_if_missing('event_sources', 'idx_event_sources_source_id', 'INDEX idx_event_sources_source_id (source, source_event_id)');
     db_add_index_if_missing('event_sources', 'idx_event_sources_source_variant', 'INDEX idx_event_sources_source_variant (source, source_variant)');
 
     $checked = true;
