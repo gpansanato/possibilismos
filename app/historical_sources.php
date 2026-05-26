@@ -5,8 +5,6 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     $config = require __DIR__ . '/config.php';
     $settings = $config['sources']['historical'] ?? [];
     $wikimediaSettings = $config['sources']['wikimedia'] ?? [];
-    $maxImport = (int) ($settings['max_import'] ?? 35);
-    $maxTotal = $maxImport + (int) ($wikimediaSettings['max_import'] ?? 30);
     $maxDuration = max(20, (int) ($settings['max_duration_seconds'] ?? 120));
     $maxEnrichDuringCollection = max(0, (int) ($settings['max_enrich_during_collection'] ?? 0));
     $imported = 0;
@@ -52,10 +50,6 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
             $found += $variantFound;
 
             foreach ($candidates as $candidate) {
-                if ($imported >= $maxTotal) {
-                    break;
-                }
-
                 $eventId = persist_historical_event_candidate($candidate, $month, $day, $runDate);
                 if ($eventId > 0) {
                     $imported++;
@@ -78,22 +72,17 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
         $collectorStats[] = [
             'source' => $collector['source'],
             'source_variant' => $collector['source_variant'],
+            'label' => $collector['label'] ?? collector_label($collector),
+            'group_key' => $collector['group_key'] ?? 'other',
+            'group_label' => $collector['group_label'] ?? 'Outros coletores',
+            'group_description' => $collector['group_description'] ?? 'Coletores complementares.',
             'found' => $variantFound,
             'imported' => $variantImported,
             'enriched' => $variantEnriched,
             'failures' => $variantFailures,
             'duration' => round(max(0, microtime(true) - $variantStarted), 2),
+            'message' => $variantFailures > 0 ? 'Coletor concluido com falhas.' : 'Coletor concluido.',
         ];
-
-        if ($imported >= $maxTotal) {
-            foreach (array_slice($collectors, $processedCollectors + $alreadyCompleted) as $remainingCollector) {
-                $remainingKey = collector_status_key($remainingCollector);
-                if (!isset($completedCollectors[$remainingKey])) {
-                    $pendingCollectorLabels[] = collector_label($remainingCollector);
-                }
-            }
-            break;
-        }
     }
 
     $finalStatus = event_collector_status_summary($runDate);
@@ -496,7 +485,7 @@ function historical_event_collectors(array $settings, array $wikimediaSettings):
                 'source' => 'Wikidata',
                 'source_variant' => $variant,
                 'definition' => $definition,
-            ];
+            ] + historical_collector_metadata('Wikidata', $variant);
         }
     }
 
@@ -508,7 +497,7 @@ function historical_event_collectors(array $settings, array $wikimediaSettings):
                     'source_variant' => 'on_this_day_' . $language . '_' . $type,
                     'language' => $language,
                     'type' => $type,
-                ];
+                ] + historical_collector_metadata('Wikipedia / Wikimedia', 'on_this_day_' . $language . '_' . $type, $language, $type);
             }
         }
     }
@@ -534,6 +523,74 @@ function historical_event_collectors(array $settings, array $wikimediaSettings):
     }
 
     return $collectors;
+}
+
+function historical_collector_groups(): array
+{
+    return [
+        'canonical_core' => [
+            'label' => 'Nucleo canonico',
+            'description' => 'Busca estrutural principal para identificar eventos com ID canonico e data pontual.',
+        ],
+        'wikimedia_editorial' => [
+            'label' => 'Curadoria Wikimedia',
+            'description' => 'Efemerides selecionadas em diferentes idiomas, uteis para relevancia editorial inicial.',
+        ],
+        'wikidata_temporal' => [
+            'label' => 'Expansao temporal',
+            'description' => 'Eventos marcados por data de inicio ou encerramento, que podem nao aparecer como data pontual.',
+        ],
+        'wikidata_thematic' => [
+            'label' => 'Expansao tematica',
+            'description' => 'Consultas Wikidata por recortes editoriais como conflitos, politica, descobertas e publicacoes.',
+        ],
+        'biographical' => [
+            'label' => 'Efemerides biograficas',
+            'description' => 'Nascimentos e mortes relevantes tratados separadamente para reduzir mistura com eventos historicos gerais.',
+        ],
+        'wikimedia_broad' => [
+            'label' => 'Wikimedia ampla',
+            'description' => 'Eventos gerais do On This Day usados para ampliar cobertura ao final da coleta.',
+        ],
+    ];
+}
+
+function historical_collector_metadata(string $source, string $variant, ?string $language = null, ?string $type = null): array
+{
+    $groups = historical_collector_groups();
+    $groupKey = 'wikidata_thematic';
+    $label = $source . ' / ' . $variant;
+
+    if ($source === 'Wikidata') {
+        $map = [
+            'point_in_time' => ['canonical_core', 'Wikidata: data pontual'],
+            'start_time' => ['wikidata_temporal', 'Wikidata: data de inicio'],
+            'end_time' => ['wikidata_temporal', 'Wikidata: data de encerramento'],
+            'conflicts' => ['wikidata_thematic', 'Wikidata: conflitos'],
+            'political_events' => ['wikidata_thematic', 'Wikidata: eventos politicos'],
+            'discoveries_inventions' => ['wikidata_thematic', 'Wikidata: descobertas e invencoes'],
+            'works_publications' => ['wikidata_thematic', 'Wikidata: obras e publicacoes'],
+            'births_deaths' => ['biographical', 'Wikidata: nascimentos'],
+            'deaths' => ['biographical', 'Wikidata: mortes'],
+        ];
+        [$groupKey, $label] = $map[$variant] ?? ['wikidata_thematic', $label];
+    } elseif ($source === 'Wikipedia / Wikimedia') {
+        $languageLabel = strtoupper((string) $language);
+        if ($type === 'selected') {
+            $groupKey = 'wikimedia_editorial';
+            $label = 'Wikimedia ' . $languageLabel . ': selecionados';
+        } else {
+            $groupKey = 'wikimedia_broad';
+            $label = 'Wikimedia ' . $languageLabel . ': eventos gerais';
+        }
+    }
+
+    return [
+        'label' => $label,
+        'group_key' => $groupKey,
+        'group_label' => $groups[$groupKey]['label'] ?? 'Outros coletores',
+        'group_description' => $groups[$groupKey]['description'] ?? 'Coletores complementares.',
+    ];
 }
 
 function wikidata_priority_collector_variants(): array
