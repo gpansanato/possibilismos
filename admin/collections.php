@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processSteps = [
                 collection_process_step('Preparar eventos para enriquecimento', 'Seleciona todos os eventos historicos do dia para o tipo de enriquecimento solicitado.', $result['evaluated'] . ' eventos avaliados'),
                 collection_process_step('Verificar enriquecimentos existentes', 'Eventos ja cobertos por este tipo sao contabilizados sem nova chamada externa.', $result['already_enriched'] . ' eventos ja enriquecidos'),
-                collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado para todos os eventos elegiveis da data.', $result['saved_enrichments'] . ' enriquecimentos salvos'),
+                collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado para todos os eventos elegiveis da data.', collection_enrichment_source_stats_text($result['source_stats'] ?? [])),
                 collection_process_step('Atualizar eventos enriquecidos', 'Marca eventos com enriquecimento salvo e preserva os que nao retornaram resultado.', $result['enriched_events'] . ' eventos enriquecidos'),
                 collection_process_step('Registrar itens sem fonte ou sem resultado', 'Eventos sem fonte suficiente ou sem retorno da fonte ficam disponiveis para nova tentativa futura.', $result['without_source'] . ' sem fonte; ' . $result['without_results'] . ' sem resultado'),
                 collection_process_step('Atualizar resumo operacional do enriquecimento', 'Contadores recalculados para a tabela de status.', $summary['enrichment_records'] . ' enriquecimentos totais'),
@@ -94,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'Sem fonte suficiente' => $result['without_source'],
                 'Sem resultado' => $result['without_results'],
                 'Falhas' => $result['failures'],
+                'Fontes consultadas' => collection_enrichment_source_stats_text($result['source_stats'] ?? []),
             ]);
             $message = 'Processamento de enriquecimento concluido.';
         } elseif ($action === 'process_context') {
@@ -227,17 +228,26 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         </form>
         <form class="actions" method="post" id="collection-process-form" action="/admin/collections.php">
             <input type="hidden" name="date" id="collection-process-date" value="<?= h($date) ?>">
-            <label>Tipo de enriquecimento
-                <select name="enrichment_group">
-                    <?php foreach (historical_enrichment_group_labels() as $groupKey => $groupLabel): ?>
-                        <option value="<?= h($groupKey) ?>"><?= h($groupLabel) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-            <button name="action" value="process_events" type="submit" data-process-label="Processamento 1: eventos historicos">Processar eventos historicos</button>
-            <button class="button-secondary" name="action" value="process_enrichment" type="submit" data-process-label="Processamento 2: enriquecimento de eventos">Enriquecer eventos</button>
-            <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 3: contexto do dia">Processar contexto do dia</button>
-            <button class="button-secondary" name="action" value="process_priority" type="submit" data-process-label="Processamento 4: priorizacao de eventos">Aplicar priorizacao</button>
+            <div class="process-action-group">
+                <button name="action" value="process_events" type="submit" data-process-label="Processamento 1: eventos historicos">Processar eventos historicos</button>
+                <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 3: contexto do dia">Processar contexto do dia</button>
+                <button class="button-secondary" name="action" value="process_priority" type="submit" data-process-label="Processamento 4: priorizacao de eventos">Aplicar priorizacao</button>
+            </div>
+            <div class="enrichment-command">
+                <div>
+                    <strong>Enriquecimento dos eventos historicos</strong>
+                    <p>Escolha o tipo de fonte complementar que sera aplicado aos eventos da data selecionada.</p>
+                    <p><?= h((string) $historicalSummary['total']) ?> eventos na data; <?= h((string) $historicalSummary['not_enriched']) ?> ainda sem enriquecimento marcado.</p>
+                </div>
+                <label>Tipo de enriquecimento
+                    <select name="enrichment_group">
+                        <?php foreach (historical_available_enrichment_group_labels() as $groupKey => $groupLabel): ?>
+                            <option value="<?= h($groupKey) ?>"><?= h($groupLabel) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <button class="button-secondary" name="action" value="process_enrichment" type="submit" data-process-label="Processamento 2: enriquecimento de eventos">Enriquecer eventos</button>
+            </div>
         </form>
     </section>
 
@@ -529,6 +539,25 @@ function collection_process_summary(float $startedAt, string $startedLabel, arra
     return $summary;
 }
 
+function collection_enrichment_source_stats_text(array $sourceStats): string
+{
+    if (!$sourceStats) {
+        return 'Nenhuma fonte externa consultada.';
+    }
+
+    $parts = [];
+    foreach ($sourceStats as $source => $stats) {
+        $parts[] = $source . ': ' .
+            (int) ($stats['attempted'] ?? 0) . ' consultas, ' .
+            (int) ($stats['saved'] ?? 0) . ' salvos, ' .
+            (int) ($stats['empty'] ?? 0) . ' sem resultado, ' .
+            (int) ($stats['skipped'] ?? 0) . ' ignorados, ' .
+            (int) ($stats['errors'] ?? 0) . ' falhas';
+    }
+
+    return implode(' | ', $parts);
+}
+
 function collection_action_label(string $action): string
 {
     return [
@@ -556,7 +585,7 @@ function collection_flow_steps(): array
         'process_enrichment' => [
             collection_process_step('Preparar eventos para enriquecimento', 'Seleciona todos os eventos do dia para o tipo de enriquecimento escolhido.', 'Quantidade tratada: eventos avaliaveis.'),
             collection_process_step('Verificar enriquecimentos existentes', 'Identifica eventos ja cobertos por esse tipo para evitar chamadas externas desnecessarias.', 'Quantidade tratada: eventos ja enriquecidos.'),
-            collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado: leve, documental, visual, geografico, academico ou completo.', 'Quantidade tratada: fontes consultadas.'),
+            collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado: leve, documental, visual, geografico ou completo.', 'Quantidade tratada: fontes consultadas.'),
             collection_process_step('Salvar enriquecimentos obtidos', 'Persiste registros em event_enrichments e atualiza image_url/enriched_at quando aplicavel.', 'Quantidade tratada: enriquecimentos salvos.'),
             collection_process_step('Registrar eventos sem fonte ou sem resultado', 'Mantem eventos sem retorno disponiveis para nova tentativa.', 'Quantidade tratada: eventos sem enriquecimento.'),
             collection_process_step('Atualizar resumo operacional do enriquecimento', 'Recalcula contadores de eventos enriquecidos e pendentes.', 'Quantidade tratada: totais consolidados.'),

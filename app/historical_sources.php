@@ -49,7 +49,8 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
                     $imported++;
                     $variantImported++;
                     if ($maxEnrichDuringCollection > 0 && $enriched < $maxEnrichDuringCollection) {
-                        $savedEnrichments = enrich_historical_event($eventId, $candidate['payload'] ?? [], ['light']);
+                        $enrichmentResult = enrich_historical_event($eventId, $candidate['payload'] ?? [], ['light']);
+                        $savedEnrichments = $enrichmentResult['saved'];
                         $enriched += $savedEnrichments;
                         $variantEnriched += $savedEnrichments;
                     }
@@ -95,7 +96,6 @@ function historical_enrichment_group_labels(): array
         'documental' => 'Documental: acervos e arquivos',
         'visual' => 'Visual: imagens e museus',
         'geographic' => 'Geografico: referencias territoriais',
-        'academic' => 'Academico: referencias de pesquisa',
         'all' => 'Completo: todos os grupos ativos',
     ];
 }
@@ -111,9 +111,20 @@ function historical_enrichment_group_label(string $group): string
     return historical_enrichment_group_labels()[$group];
 }
 
+function historical_available_enrichment_group_labels(): array
+{
+    $config = require __DIR__ . '/config.php';
+    $settings = $config['sources']['historical'] ?? [];
+    $labels = historical_enrichment_group_labels();
+    $available = historical_available_enrichment_groups($settings);
+
+    return array_intersect_key($labels, array_fill_keys($available, true));
+}
+
 function enrich_historical_events_for_day(int $month, int $day, string $group = 'light'): array
 {
     $group = normalize_historical_enrichment_group($group);
+    sync_enriched_at_for_day($month, $day);
     $started = microtime(true);
     $evaluated = 0;
     $enrichedEvents = 0;
@@ -140,32 +151,49 @@ function enrich_historical_events_for_day(int $month, int $day, string $group = 
     );
     $stmt->execute([$month, $day]);
     $events = $stmt->fetchAll();
-    $enabledGroups = $group === 'all' ? null : [$group];
+    $eventIds = array_map(static fn($event) => (int) $event['id'], $events);
+    $coverage = enrichment_group_coverage_for_events($eventIds);
+    $config = require __DIR__ . '/config.php';
+    $settings = $config['sources']['historical'] ?? [];
+    $availableGroups = historical_available_enrichment_groups($settings);
+    $groupsToRun = $group === 'all'
+        ? array_values(array_diff($availableGroups, ['all']))
+        : [$group];
+    $sourceStats = [];
 
     foreach ($events as $event) {
         $evaluated++;
+        $eventId = (int) $event['id'];
         try {
-            if ($group !== 'all' && event_has_enrichment_group((int) $event['id'], $group)) {
-                $alreadyEnriched++;
+            $pendingGroups = [];
+            foreach ($groupsToRun as $groupKey) {
+                if (!empty($coverage[$eventId][$groupKey])) {
+                    $alreadyEnriched++;
+                    continue;
+                }
+                $pendingGroups[] = $groupKey;
+            }
+
+            if (!$pendingGroups) {
                 continue;
             }
 
-            if ($group === 'light' && historical_event_article_url($event, []) === '') {
-                $withoutSource++;
-                continue;
-            }
-
-            $saved = enrich_historical_event((int) $event['id'], [], $enabledGroups);
+            $result = enrich_historical_event((int) $event['id'], [], $pendingGroups);
+            $saved = $result['saved'];
+            $withoutSource += $result['without_source'];
+            $withoutResults += $result['without_results'];
+            $failures += $result['failures'];
+            merge_enrichment_source_stats($sourceStats, $result['sources']);
             if ($saved > 0) {
                 $enrichedEvents++;
                 $savedEnrichments += $saved;
-            } else {
-                $withoutResults++;
             }
         } catch (Throwable $e) {
             $failures++;
         }
     }
+
+    sync_enriched_at_for_day($month, $day);
 
     return [
         'evaluated' => $evaluated,
@@ -177,13 +205,58 @@ function enrich_historical_events_for_day(int $month, int $day, string $group = 
         'failures' => $failures,
         'group' => $group,
         'group_label' => historical_enrichment_group_label($group),
+        'source_stats' => $sourceStats,
         'duration' => round(max(0, microtime(true) - $started), 2),
     ];
 }
 
-function event_has_enrichment_group(int $eventId, string $group): bool
+function historical_available_enrichment_groups(array $settings): array
 {
-    $groups = [
+    $event = ['id' => 0, 'title' => '', 'region' => '', 'source_url' => ''];
+    $groups = [];
+    foreach (historical_enrichment_sources($event, [], $settings) as $groupKey => $sources) {
+        foreach ($sources as $source) {
+            if (!empty($source['enabled'])) {
+                $groups[] = $groupKey;
+                break;
+            }
+        }
+    }
+
+    if (count($groups) > 1) {
+        $groups[] = 'all';
+    }
+
+    return $groups ?: ['light'];
+}
+
+function enrichment_group_coverage_for_events(array $eventIds): array
+{
+    $eventIds = array_values(array_filter(array_unique(array_map('intval', $eventIds))));
+    if (!$eventIds) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($eventIds), '?'));
+    $stmt = db()->prepare(
+        'SELECT event_id, source, role
+         FROM event_enrichments
+         WHERE event_id IN (' . $placeholders . ')'
+    );
+    $stmt->execute($eventIds);
+    $coverage = [];
+    foreach ($stmt->fetchAll() as $row) {
+        foreach (enrichment_groups_for_source_role((string) $row['source'], (string) $row['role']) as $group) {
+            $coverage[(int) $row['event_id']][$group] = true;
+        }
+    }
+
+    return $coverage;
+}
+
+function enrichment_groups_for_source_role(string $source, string $role): array
+{
+    $map = [
         'light' => [
             ['Wikipedia / Wikimedia', 'context'],
             ['Wikimedia Commons', 'visual'],
@@ -200,28 +273,48 @@ function event_has_enrichment_group(int $eventId, string $group): bool
             ['OpenHistoricalMap', 'geo'],
             ['OpenHistoricalMap', 'geographic'],
         ],
-        'academic' => [],
     ];
 
-    $pairs = $groups[$group] ?? [];
-    if (!$pairs) {
-        return false;
+    $groups = [];
+    foreach ($map as $group => $pairs) {
+        foreach ($pairs as $pair) {
+            if ($source === $pair[0] && $role === $pair[1]) {
+                $groups[] = $group;
+                break;
+            }
+        }
     }
 
-    $clauses = [];
-    $params = [$eventId];
-    foreach ($pairs as $pair) {
-        $clauses[] = '(source = ? AND role = ?)';
-        $params[] = $pair[0];
-        $params[] = $pair[1];
+    return $groups;
+}
+
+function sync_enriched_at_for_day(int $month, int $day): void
+{
+    db()->prepare(
+        'UPDATE events e
+         SET e.enriched_at = COALESCE(e.enriched_at, NOW())
+         WHERE e.event_month = ? AND e.event_day = ?
+           AND EXISTS (SELECT 1 FROM event_enrichments en WHERE en.event_id = e.id)'
+    )->execute([$month, $day]);
+}
+
+function merge_enrichment_source_stats(array &$target, array $sourceStats): void
+{
+    foreach ($sourceStats as $source => $stats) {
+        if (!isset($target[$source])) {
+            $target[$source] = [
+                'attempted' => 0,
+                'saved' => 0,
+                'empty' => 0,
+                'skipped' => 0,
+                'errors' => 0,
+            ];
+        }
+
+        foreach ($target[$source] as $key => $value) {
+            $target[$source][$key] += (int) ($stats[$key] ?? 0);
+        }
     }
-
-    $stmt = db()->prepare(
-        'SELECT 1 FROM event_enrichments WHERE event_id = ? AND (' . implode(' OR ', $clauses) . ') LIMIT 1'
-    );
-    $stmt->execute($params);
-
-    return (bool) $stmt->fetchColumn();
 }
 
 function historical_event_collectors(array $settings, array $wikimediaSettings): array
@@ -612,24 +705,60 @@ function import_historical_events_from_wikimedia(int $month, int $day, int $maxI
     return $imported;
 }
 
-function enrich_historical_event(int $eventId, array $seed = [], ?array $enabledGroups = null): int
+function enrich_historical_event(int $eventId, array $seed = [], ?array $enabledGroups = null): array
 {
     $event = event_by_id($eventId);
     if (!$event) {
-        return 0;
+        return empty_enrichment_result();
     }
 
     $config = require __DIR__ . '/config.php';
     $settings = $config['sources']['historical'] ?? [];
     $saved = 0;
+    $withoutSource = 0;
+    $withoutResults = 0;
+    $failures = 0;
+    $sourceStats = [];
 
-    foreach (historical_enrichment_groups($event, $seed, $settings) as $groupKey => $group) {
+    foreach (historical_enrichment_sources($event, $seed, $settings) as $groupKey => $sources) {
         if ($enabledGroups !== null && !in_array($groupKey, $enabledGroups, true)) {
             continue;
         }
 
-        foreach ($group['steps'] as $step) {
-            $saved += $step();
+        foreach ($sources as $sourceKey => $source) {
+            $sourceLabel = $source['label'];
+            if (empty($source['enabled'])) {
+                continue;
+            }
+
+            if (!isset($sourceStats[$sourceLabel])) {
+                $sourceStats[$sourceLabel] = ['attempted' => 0, 'saved' => 0, 'empty' => 0, 'skipped' => 0, 'errors' => 0];
+            }
+
+            if (empty($source['available'])) {
+                $withoutSource++;
+                $sourceStats[$sourceLabel]['skipped']++;
+                save_event_enrichment_status($eventId, $groupKey, $sourceLabel, 'skipped', 0, $source['message']);
+                continue;
+            }
+
+            $sourceStats[$sourceLabel]['attempted']++;
+            try {
+                $sourceSaved = (int) $source['callback']();
+                $saved += $sourceSaved;
+                if ($sourceSaved > 0) {
+                    $sourceStats[$sourceLabel]['saved'] += $sourceSaved;
+                    save_event_enrichment_status($eventId, $groupKey, $sourceLabel, 'done', $sourceSaved, 'Enriquecimento salvo.');
+                } else {
+                    $withoutResults++;
+                    $sourceStats[$sourceLabel]['empty']++;
+                    save_event_enrichment_status($eventId, $groupKey, $sourceLabel, 'empty', 0, 'Fonte consultada sem resultado aplicavel.');
+                }
+            } catch (Throwable $e) {
+                $failures++;
+                $sourceStats[$sourceLabel]['errors']++;
+                save_event_enrichment_status($eventId, $groupKey, $sourceLabel, 'error', 0, $e->getMessage());
+            }
         }
     }
 
@@ -637,57 +766,105 @@ function enrich_historical_event(int $eventId, array $seed = [], ?array $enabled
         db()->prepare('UPDATE events SET enriched_at = NOW() WHERE id = ?')->execute([$eventId]);
     }
 
-    return $saved;
+    return [
+        'saved' => $saved,
+        'without_source' => $withoutSource,
+        'without_results' => $withoutResults,
+        'failures' => $failures,
+        'sources' => $sourceStats,
+    ];
 }
 
-function historical_enrichment_groups(array $event, array $seed, array $settings): array
+function empty_enrichment_result(): array
+{
+    return [
+        'saved' => 0,
+        'without_source' => 0,
+        'without_results' => 0,
+        'failures' => 0,
+        'sources' => [],
+    ];
+}
+
+function historical_enrichment_sources(array $event, array $seed, array $settings): array
 {
     $article = historical_event_article_url($event, $seed);
 
     return [
         'light' => [
-            'label' => 'Enriquecimento leve',
-            'steps' => [
-                static fn() => !empty($settings['wikipedia']['enabled']) && $article !== ''
-                    ? enrich_event_from_wikipedia($event, $article, $settings)
-                    : 0,
+            'wikipedia' => [
+                'label' => 'Wikipedia REST Summary',
+                'enabled' => !empty($settings['wikipedia']['enabled']),
+                'available' => $article !== '',
+                'message' => $article !== '' ? 'Artigo Wikipedia localizado.' : 'Sem artigo Wikipedia associado ao evento.',
+                'callback' => static fn() => enrich_event_from_wikipedia($event, $article, $settings),
             ],
         ],
         'documental' => [
-            'label' => 'Enriquecimento documental',
-            'steps' => [
-                static fn() => !empty($settings['library_of_congress']['enabled'])
-                    ? enrich_event_from_library_of_congress($event, $settings)
-                    : 0,
-                static fn() => !empty($settings['europeana']['enabled']) && !empty($settings['europeana']['api_key'])
-                    ? enrich_event_from_europeana($event, $settings['europeana'])
-                    : 0,
-                static fn() => !empty($settings['dpla']['enabled']) && !empty($settings['dpla']['api_key'])
-                    ? enrich_event_from_dpla($event, $settings['dpla'])
-                    : 0,
+            'library_of_congress' => [
+                'label' => 'Library of Congress',
+                'enabled' => !empty($settings['library_of_congress']['enabled']),
+                'available' => true,
+                'message' => 'Busca documental habilitada.',
+                'callback' => static fn() => enrich_event_from_library_of_congress($event, $settings),
+            ],
+            'europeana' => [
+                'label' => 'Europeana',
+                'enabled' => !empty($settings['europeana']['enabled']),
+                'available' => !empty($settings['europeana']['api_key']),
+                'message' => !empty($settings['europeana']['api_key']) ? 'API key configurada.' : 'API key da Europeana ausente.',
+                'callback' => static fn() => enrich_event_from_europeana($event, $settings['europeana']),
+            ],
+            'dpla' => [
+                'label' => 'DPLA / National Archives',
+                'enabled' => !empty($settings['dpla']['enabled']),
+                'available' => !empty($settings['dpla']['api_key']),
+                'message' => !empty($settings['dpla']['api_key']) ? 'API key configurada.' : 'API key da DPLA ausente.',
+                'callback' => static fn() => enrich_event_from_dpla($event, $settings['dpla']),
             ],
         ],
         'visual' => [
-            'label' => 'Enriquecimento visual',
-            'steps' => [
-                static fn() => !empty($settings['smithsonian']['enabled']) && !empty($settings['smithsonian']['api_key'])
-                    ? enrich_event_from_smithsonian($event, $settings['smithsonian'])
-                    : 0,
+            'smithsonian' => [
+                'label' => 'Smithsonian Open Access',
+                'enabled' => !empty($settings['smithsonian']['enabled']),
+                'available' => !empty($settings['smithsonian']['api_key']),
+                'message' => !empty($settings['smithsonian']['api_key']) ? 'API key configurada.' : 'API key do Smithsonian ausente.',
+                'callback' => static fn() => enrich_event_from_smithsonian($event, $settings['smithsonian']),
             ],
         ],
         'geographic' => [
-            'label' => 'Enriquecimento geografico',
-            'steps' => [
-                static fn() => !empty($settings['openhistoricalmap']['enabled']) && !empty($settings['openhistoricalmap']['url'])
-                    ? enrich_event_from_openhistoricalmap($event, $settings['openhistoricalmap'])
-                    : 0,
+            'openhistoricalmap' => [
+                'label' => 'OpenHistoricalMap',
+                'enabled' => !empty($settings['openhistoricalmap']['enabled']),
+                'available' => !empty($settings['openhistoricalmap']['url']),
+                'message' => !empty($settings['openhistoricalmap']['url']) ? 'Endpoint configurado.' : 'Endpoint OpenHistoricalMap ausente.',
+                'callback' => static fn() => enrich_event_from_openhistoricalmap($event, $settings['openhistoricalmap']),
             ],
         ],
-        'academic' => [
-            'label' => 'Enriquecimento academico',
-            'steps' => [],
-        ],
     ];
+}
+
+function save_event_enrichment_status(int $eventId, string $group, string $source, string $status, int $resultCount, string $message): void
+{
+    $stmt = db()->prepare(
+        'INSERT INTO event_enrichment_statuses
+         (event_id, enrichment_group, source, status, result_count, message, attempted_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+            status = VALUES(status),
+            result_count = VALUES(result_count),
+            message = VALUES(message),
+            attempted_at = VALUES(attempted_at),
+            updated_at = NOW()'
+    );
+    $stmt->execute([
+        $eventId,
+        $group,
+        $source,
+        $status,
+        $resultCount,
+        mb_substr($message, 0, 1000, 'UTF-8'),
+    ]);
 }
 
 function historical_event_article_url(array $event, array $seed): string

@@ -961,6 +961,38 @@ button.is-loading {
     margin-right: 6px;
 }
 
+.process-action-group,
+.enrichment-command {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 10px;
+    width: 100%;
+}
+
+.enrichment-command {
+    margin-top: 8px;
+    padding: 14px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.enrichment-command > div {
+    min-width: min(100%, 320px);
+    flex: 1 1 320px;
+}
+
+.enrichment-command strong {
+    display: block;
+    color: var(--color-text-primary);
+}
+
+.enrichment-command p {
+    margin: 4px 0 0;
+    color: var(--color-text-secondary);
+}
+
 .process-steps {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
