@@ -404,7 +404,13 @@ function collected_contexts_search(string $runDate, ?string $type, string $sourc
         'date_desc' => 'run_date DESC, updated_at DESC, id DESC',
         'date_asc' => 'run_date ASC, updated_at ASC, id ASC',
         'type' => 'context_type ASC, source ASC, title ASC',
+        'type_desc' => 'context_type DESC, source ASC, title ASC',
         'source' => 'source ASC, context_type ASC, title ASC',
+        'source_desc' => 'source DESC, context_type ASC, title ASC',
+        'title_asc' => 'title ASC, source ASC, id ASC',
+        'title_desc' => 'title DESC, source ASC, id DESC',
+        'keywords_asc' => 'keywords ASC, title ASC, id ASC',
+        'keywords_desc' => 'keywords DESC, title ASC, id DESC',
     ];
     if (!isset($allowedSorts[$sort])) {
         $sort = 'updated_desc';
