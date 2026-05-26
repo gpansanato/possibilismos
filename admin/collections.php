@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
             $imports = event_import_summary_for_date($actionDate);
             $processTitle = 'Coleta de eventos historicos';
-            $processDescription = 'Coleta, normalizacao e deduplicacao dos fatos historicos da data selecionada. Coletores ja concluidos sao pulados em novas execucoes.';
+            $processDescription = 'Coleta, normalizacao e deduplicacao dos fatos historicos da data selecionada. O limite operacional considera apenas tempo de execucao; coletores ja concluidos sao pulados em novas execucoes.';
             $processSteps = [
                 collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fluxo iniciado.', '1 data processada'),
                 collection_process_step('Executar matriz de coletores historicos', 'Wikidata roda como fonte principal e Wikimedia On This Day roda sempre em pt, en e es quando configurado.', ($result['found'] ?? $result['imported']) . ' candidatos encontrados nesta execucao'),
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'Coletores concluidos no total' => ($result['completed_collectors'] ?? 0) . ' de ' . ($result['total_collectors'] ?? 0),
                 'Ainda falta coletar' => ($result['pending_collectors'] ?? 0) > 0 ? ($result['pending_collectors'] . ' coletores: ' . implode(', ', array_slice($result['pending_collector_labels'] ?? [], 0, 4))) : 'nenhum coletor pendente',
                 'Coletores com erro' => $result['error_collectors'] ?? 0,
-                'Limite operacional' => !empty($result['halted_by_budget']) ? 'atingido; execute novamente para continuar a fila' : 'nao atingido',
+                'Limite operacional' => !empty($result['halted_by_budget']) ? 'tempo atingido (' . ($result['max_duration_seconds'] ?? 0) . 's); execute novamente para continuar a fila' : 'tempo nao atingido',
             ]);
             $message = 'Coleta de eventos historicos concluida.';
         } elseif ($action === 'process_enrichment') {

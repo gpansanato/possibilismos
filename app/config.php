@@ -32,7 +32,6 @@ $config = [
         'historical' => [
             'enabled' => true,
             'max_import' => 35,
-            'max_collectors_per_run' => 6,
             'max_duration_seconds' => 120,
             'max_enrich_during_collection' => 0,
             'max_enrichment_events_per_run' => 20,

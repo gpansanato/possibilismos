@@ -7,7 +7,6 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     $wikimediaSettings = $config['sources']['wikimedia'] ?? [];
     $maxImport = (int) ($settings['max_import'] ?? 35);
     $maxTotal = $maxImport + (int) ($wikimediaSettings['max_import'] ?? 30);
-    $maxCollectors = max(1, (int) ($settings['max_collectors_per_run'] ?? 6));
     $maxDuration = max(20, (int) ($settings['max_duration_seconds'] ?? 120));
     $maxEnrichDuringCollection = max(0, (int) ($settings['max_enrich_during_collection'] ?? 0));
     $imported = 0;
@@ -15,7 +14,6 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     $found = 0;
     $failures = 0;
     $processedCollectors = 0;
-    $skippedCollectors = 0;
     $haltedByBudget = false;
     $collectorStats = [];
     $started = microtime(true);
@@ -34,8 +32,7 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
             continue;
         }
 
-        if ($processedCollectors >= $maxCollectors || (microtime(true) - $started) >= $maxDuration) {
-            $skippedCollectors++;
+        if ((microtime(true) - $started) >= $maxDuration) {
             $haltedByBudget = true;
             $pendingCollectorLabels[] = collector_label($collector);
             continue;
@@ -109,6 +106,7 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
         'processed_collectors' => $processedCollectors,
         'skipped_collectors' => max(0, $totalCollectors - (int) $finalStatus['done']),
         'halted_by_budget' => $haltedByBudget,
+        'max_duration_seconds' => $maxDuration,
         'total_collectors' => $totalCollectors,
         'completed_collectors' => (int) $finalStatus['done'],
         'already_completed_collectors' => $alreadyCompleted,
