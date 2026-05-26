@@ -19,11 +19,25 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     $haltedByBudget = false;
     $collectorStats = [];
     $started = microtime(true);
+    $runDate = $runDate ?: historical_import_run_date($month, $day);
+    $collectors = historical_event_collectors($settings, $wikimediaSettings);
+    ensure_event_collector_statuses($runDate, $collectors);
+    $completedCollectors = completed_event_collectors_for_date($runDate);
+    $totalCollectors = count($collectors);
+    $alreadyCompleted = 0;
+    $pendingCollectorLabels = [];
 
-    foreach (historical_event_collectors($settings, $wikimediaSettings) as $collector) {
+    foreach ($collectors as $collector) {
+        $collectorKey = collector_status_key($collector);
+        if (isset($completedCollectors[$collectorKey])) {
+            $alreadyCompleted++;
+            continue;
+        }
+
         if ($processedCollectors >= $maxCollectors || (microtime(true) - $started) >= $maxDuration) {
             $skippedCollectors++;
             $haltedByBudget = true;
+            $pendingCollectorLabels[] = collector_label($collector);
             continue;
         }
 
@@ -35,6 +49,7 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
         $variantFailures = 0;
 
         try {
+            mark_event_collector_status($runDate, $collector, 'running', 0, 0, 0, 'Coletor em execucao.');
             $candidates = collect_historical_event_candidates($collector, $month, $day, $settings);
             $variantFound = count($candidates);
             $found += $variantFound;
@@ -56,9 +71,11 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
                     }
                 }
             }
+            mark_event_collector_status($runDate, $collector, 'done', $variantFound, $variantImported, $variantFailures, 'Coletor concluido.');
         } catch (Throwable $e) {
             $failures++;
             $variantFailures++;
+            mark_event_collector_status($runDate, $collector, 'error', $variantFound, $variantImported, $variantFailures, $e->getMessage());
         }
 
         $collectorStats[] = [
@@ -72,9 +89,17 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
         ];
 
         if ($imported >= $maxTotal) {
+            foreach (array_slice($collectors, $processedCollectors + $alreadyCompleted) as $remainingCollector) {
+                $remainingKey = collector_status_key($remainingCollector);
+                if (!isset($completedCollectors[$remainingKey])) {
+                    $pendingCollectorLabels[] = collector_label($remainingCollector);
+                }
+            }
             break;
         }
     }
+
+    $finalStatus = event_collector_status_summary($runDate);
 
     return [
         'found' => $found,
@@ -82,11 +107,127 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
         'enriched' => $enriched,
         'failures' => $failures,
         'processed_collectors' => $processedCollectors,
-        'skipped_collectors' => $skippedCollectors,
+        'skipped_collectors' => max(0, $totalCollectors - (int) $finalStatus['done']),
         'halted_by_budget' => $haltedByBudget,
+        'total_collectors' => $totalCollectors,
+        'completed_collectors' => (int) $finalStatus['done'],
+        'already_completed_collectors' => $alreadyCompleted,
+        'pending_collectors' => (int) $finalStatus['pending'],
+        'error_collectors' => (int) $finalStatus['error'],
+        'pending_collector_labels' => pending_event_collector_labels($runDate),
         'duration' => round(max(0, microtime(true) - $started), 2),
         'collectors' => $collectorStats,
     ];
+}
+
+function collector_status_key(array $collector): string
+{
+    return $collector['source'] . '|' . $collector['source_variant'];
+}
+
+function collector_label(array $collector): string
+{
+    return $collector['source'] . ' / ' . $collector['source_variant'];
+}
+
+function ensure_event_collector_statuses(string $runDate, array $collectors): void
+{
+    $stmt = db()->prepare(
+        'INSERT IGNORE INTO event_collector_statuses
+         (run_date, source, source_variant, status, updated_at)
+         VALUES (?, ?, ?, "pending", NOW())'
+    );
+
+    foreach ($collectors as $collector) {
+        $stmt->execute([$runDate, $collector['source'], $collector['source_variant']]);
+    }
+}
+
+function completed_event_collectors_for_date(string $runDate): array
+{
+    $stmt = db()->prepare(
+        'SELECT source, source_variant
+         FROM event_collector_statuses
+         WHERE run_date = ? AND status = "done"'
+    );
+    $stmt->execute([$runDate]);
+    $completed = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $completed[$row['source'] . '|' . $row['source_variant']] = true;
+    }
+
+    return $completed;
+}
+
+function mark_event_collector_status(
+    string $runDate,
+    array $collector,
+    string $status,
+    int $found,
+    int $imported,
+    int $errors,
+    string $message
+): void {
+    $stmt = db()->prepare(
+        'INSERT INTO event_collector_statuses
+         (run_date, source, source_variant, status, found_count, imported_count, error_count, message, started_at, finished_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = "running" THEN NOW() ELSE NULL END, CASE WHEN ? IN ("done", "error", "skipped") THEN NOW() ELSE NULL END, NOW())
+         ON DUPLICATE KEY UPDATE
+            status = VALUES(status),
+            found_count = VALUES(found_count),
+            imported_count = VALUES(imported_count),
+            error_count = VALUES(error_count),
+            message = VALUES(message),
+            started_at = CASE WHEN VALUES(status) = "running" THEN NOW() ELSE started_at END,
+            finished_at = CASE WHEN VALUES(status) IN ("done", "error", "skipped") THEN NOW() ELSE finished_at END,
+            updated_at = NOW()'
+    );
+    $stmt->execute([
+        $runDate,
+        $collector['source'],
+        $collector['source_variant'],
+        $status,
+        $found,
+        $imported,
+        $errors,
+        mb_substr($message, 0, 1000, 'UTF-8'),
+        $status,
+        $status,
+    ]);
+}
+
+function event_collector_status_summary(string $runDate): array
+{
+    $stmt = db()->prepare(
+        'SELECT status, COUNT(*) total
+         FROM event_collector_statuses
+         WHERE run_date = ?
+         GROUP BY status'
+    );
+    $stmt->execute([$runDate]);
+    $summary = ['pending' => 0, 'running' => 0, 'done' => 0, 'error' => 0, 'skipped' => 0];
+    foreach ($stmt->fetchAll() as $row) {
+        $summary[$row['status']] = (int) $row['total'];
+    }
+
+    return $summary;
+}
+
+function pending_event_collector_labels(string $runDate, int $limit = 8): array
+{
+    $stmt = db()->prepare(
+        'SELECT source, source_variant
+         FROM event_collector_statuses
+         WHERE run_date = ? AND status IN ("pending", "error", "running")
+         ORDER BY id ASC
+         LIMIT ' . (int) $limit
+    );
+    $stmt->execute([$runDate]);
+
+    return array_map(
+        static fn($row) => $row['source'] . ' / ' . $row['source_variant'],
+        $stmt->fetchAll()
+    );
 }
 
 function historical_enrichment_group_labels(): array

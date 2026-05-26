@@ -36,16 +36,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $failedStep = 'Atualizando resumo da coleta';
             $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
             $imports = event_import_summary_for_date($actionDate);
-            $processTitle = 'Processamento 1: eventos historicos';
-            $processDescription = 'Coleta, normalizacao, deduplicacao e enriquecimento dos fatos historicos da data selecionada.';
+            $processTitle = 'Coleta de eventos historicos';
+            $processDescription = 'Coleta, normalizacao e deduplicacao dos fatos historicos da data selecionada. Coletores ja concluidos sao pulados em novas execucoes.';
             $processSteps = [
                 collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fluxo iniciado.', '1 data processada'),
-                collection_process_step('Executar matriz de coletores historicos', 'Wikidata roda como fonte principal e Wikimedia On This Day roda sempre em pt, en e es quando configurado.', ($result['found'] ?? $result['imported']) . ' candidatos encontrados'),
+                collection_process_step('Executar matriz de coletores historicos', 'Wikidata roda como fonte principal e Wikimedia On This Day roda sempre em pt, en e es quando configurado.', ($result['found'] ?? $result['imported']) . ' candidatos encontrados nesta execucao'),
                 collection_process_step('Normalizar titulo, data, ano, origem e chave canonica', 'Registros tratados para preservar origem, data, ano e chave canonica.', $imports['linked'] . ' imports vinculados'),
                 collection_process_step('Verificar duplicidades nos eventos e imports', 'Comparacao aplicada antes de gravar novos eventos.', $imports['ignored'] . ' registros ignorados por duplicidade'),
                 collection_process_step('Salvar ou atualizar eventos historicos coletados', 'Eventos canonicos persistidos ou vinculados a imports existentes.', $summary['total'] . ' eventos historicos na base para o dia'),
                 collection_process_step('Manter enriquecimento separado', 'A coleta preserva apenas eventos, imports e fontes. O enriquecimento passa a ser executado em processamento proprio.', $summary['not_enriched'] . ' eventos aguardando enriquecimento'),
-                collection_process_step('Atualizar resumo operacional da coleta', 'Contadores recalculados para a tabela de status.', $summary['total'] . ' eventos consolidados'),
+                collection_process_step('Atualizar progresso dos coletores', 'A fila de coletores foi atualizada para permitir continuar a coleta em uma nova execucao.', ($result['completed_collectors'] ?? 0) . ' de ' . ($result['total_collectors'] ?? 0) . ' coletores concluidos'),
                 collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', $imports['errors'] . ' falhas registradas'),
             ];
             foreach (array_slice($result['collectors'] ?? [], 0, 12) as $collector) {
@@ -63,11 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'Ignorados por duplicidade' => $imports['ignored'],
                 'Aguardando enriquecimento' => $summary['not_enriched'],
                 'Falhas' => ($result['failures'] ?? 0) + $imports['errors'],
-                'Coletores executados' => $result['processed_collectors'] ?? 0,
-                'Coletores pendentes' => $result['skipped_collectors'] ?? 0,
-                'Limite operacional' => !empty($result['halted_by_budget']) ? 'atingido' : 'nao atingido',
+                'Coletores executados agora' => $result['processed_collectors'] ?? 0,
+                'Coletores ja concluidos antes' => $result['already_completed_collectors'] ?? 0,
+                'Coletores concluidos no total' => ($result['completed_collectors'] ?? 0) . ' de ' . ($result['total_collectors'] ?? 0),
+                'Ainda falta coletar' => ($result['pending_collectors'] ?? 0) > 0 ? ($result['pending_collectors'] . ' coletores: ' . implode(', ', array_slice($result['pending_collector_labels'] ?? [], 0, 4))) : 'nenhum coletor pendente',
+                'Coletores com erro' => $result['error_collectors'] ?? 0,
+                'Limite operacional' => !empty($result['halted_by_budget']) ? 'atingido; execute novamente para continuar a fila' : 'nao atingido',
             ]);
-            $message = 'Processamento de eventos historicos concluido.';
+            $message = 'Coleta de eventos historicos concluida.';
         } elseif ($action === 'process_enrichment') {
             $enrichmentGroup = normalize_historical_enrichment_group((string) ($_POST['enrichment_group'] ?? 'light'));
             $failedStep = 'Executando enriquecimento';
@@ -229,7 +232,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         <form class="actions" method="post" id="collection-process-form" action="/admin/collections.php">
             <input type="hidden" name="date" id="collection-process-date" value="<?= h($date) ?>">
             <div class="process-action-group">
-                <button name="action" value="process_events" type="submit" data-process-label="Processamento 1: eventos historicos">Processar eventos historicos</button>
+            <button name="action" value="process_events" type="submit" data-process-label="Coleta de eventos historicos">Coletar eventos historicos</button>
                 <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 3: contexto do dia">Processar contexto do dia</button>
                 <button class="button-secondary" name="action" value="process_priority" type="submit" data-process-label="Processamento 4: priorizacao de eventos">Aplicar priorizacao</button>
             </div>
@@ -561,7 +564,7 @@ function collection_enrichment_source_stats_text(array $sourceStats): string
 function collection_action_label(string $action): string
 {
     return [
-        'process_events' => 'Processamento 1: eventos historicos',
+        'process_events' => 'Coleta de eventos historicos',
         'process_enrichment' => 'Processamento 2: enriquecimento de eventos',
         'process_context' => 'Processamento 3: contexto do dia',
         'process_priority' => 'Processamento 4: priorizacao de eventos',
@@ -572,14 +575,14 @@ function collection_flow_steps(): array
 {
     return [
         'process_events' => [
-            collection_process_step('Preparar execucao para a data selecionada', 'Valida a data, monta parametros da coleta e registra o inicio do fluxo.', 'Quantidade tratada: aguardando retorno do servidor.'),
+            collection_process_step('Preparar coleta para a data selecionada', 'Valida a data, monta parametros da coleta e registra o inicio do fluxo.', 'Quantidade tratada: aguardando retorno do servidor.'),
             collection_process_step('Consultar Wikidata para eventos historicos do dia', 'Busca fatos historicos associados ao dia e mes selecionados.', 'Quantidade tratada: eventos encontrados na fonte.'),
             collection_process_step('Executar Wikimedia On This Day', 'Coleta efemerides em pt, en e es como fonte paralela, nao apenas fallback.', 'Quantidade tratada: candidatos Wikimedia consultados.'),
             collection_process_step('Normalizar titulo, data, ano, origem e chave canonica', 'Remove duplicidade textual, separa ano/data e prepara a chave canonica do evento.', 'Quantidade tratada: registros importados normalizados.'),
             collection_process_step('Verificar duplicidades nos eventos e imports', 'Compara fonte, chave canonica, titulo, ano e data historica antes de gravar.', 'Quantidade tratada: novos, vinculados e ignorados por duplicidade.'),
             collection_process_step('Salvar ou atualizar eventos historicos coletados', 'Persiste o evento canonico ou atualiza o vinculo de importacao existente.', 'Quantidade tratada: eventos salvos ou atualizados.'),
             collection_process_step('Separar enriquecimento para etapa propria', 'A coleta termina sem buscar resumos, imagens ou documentos complementares.', 'Quantidade tratada: eventos aguardando enriquecimento.'),
-            collection_process_step('Atualizar resumo operacional da coleta', 'Recalcula contadores exibidos na tabela de status dos processamentos.', 'Quantidade tratada: total consolidado para a data.'),
+            collection_process_step('Atualizar progresso dos coletores', 'Registra quais coletores foram concluidos e quais ainda precisam rodar em nova execucao.', 'Quantidade tratada: total consolidado para a data.'),
             collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
         ],
         'process_enrichment' => [

@@ -44,6 +44,7 @@ $checks = [
     ['Tabela event_sources', table_exists('event_sources')],
     ['Tabela event_enrichments', table_exists('event_enrichments')],
     ['Tabela event_enrichment_statuses', table_exists('event_enrichment_statuses')],
+    ['Tabela event_collector_statuses', table_exists('event_collector_statuses')],
     ['Tabela daily_rankings', table_exists('daily_rankings')],
     ['Tabela scoring_settings', table_exists('scoring_settings')],
     ['events.review_status', column_exists('events', 'review_status')],
@@ -68,6 +69,7 @@ $checks = [
     ['event_sources idx_event_sources_source_id', index_exists('event_sources', 'idx_event_sources_source_id')],
     ['event_sources idx_event_sources_source_variant', index_exists('event_sources', 'idx_event_sources_source_variant')],
     ['event_enrichment_statuses uniq_event_enrichment_status', index_exists('event_enrichment_statuses', 'uniq_event_enrichment_status')],
+    ['event_collector_statuses uniq_event_collector_status', index_exists('event_collector_statuses', 'uniq_event_collector_status')],
     ['events idx_events_event_key', index_exists('events', 'idx_events_event_key')],
     ['events idx_events_review_status', index_exists('events', 'idx_events_review_status')],
 ];
@@ -131,6 +133,7 @@ sql/migrations/2026_05_23_event_enrichments.sql
 sql/migrations/2026_05_24_event_import_pipeline.sql
 sql/migrations/2026_05_25_event_source_variants.sql
 sql/migrations/2026_05_26_event_import_indexes.sql
-sql/migrations/2026_05_26_event_enrichment_statuses.sql</code></pre>
+sql/migrations/2026_05_26_event_enrichment_statuses.sql
+sql/migrations/2026_05_26_event_collector_statuses.sql</code></pre>
     </section>
 <?php render_page_end(); ?>

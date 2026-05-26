@@ -24,5 +24,6 @@ ensure_scoring_settings_schema();
 ensure_collected_contexts_schema();
 ensure_event_enrichments_schema();
 ensure_event_enrichment_status_schema();
+ensure_event_collector_status_schema();
 ensure_event_import_pipeline_schema();
 ensure_event_structured_context_schema();
