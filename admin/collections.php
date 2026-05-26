@@ -78,28 +78,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $failedStep = 'Atualizando resumo da coleta';
             $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
             $processTitle = 'Processamento 2: enriquecimento de eventos';
-            $processDescription = 'Enriquecimento coletivo dos fatos historicos da data, sem reexecutar a coleta principal. Tipo aplicado: ' . $result['group_label'] . '.';
+            $processDescription = !empty($result['halted_by_budget'])
+                ? 'Enriquecimento parcial concluido para evitar timeout do servidor. Execute novamente para continuar os eventos pendentes. Tipo aplicado: ' . $result['group_label'] . '.'
+                : 'Enriquecimento coletivo dos fatos historicos da data, sem reexecutar a coleta principal. Tipo aplicado: ' . $result['group_label'] . '.';
             $processSteps = [
-                collection_process_step('Preparar eventos para enriquecimento', 'Seleciona todos os eventos historicos do dia para o tipo de enriquecimento solicitado.', $result['evaluated'] . ' eventos avaliados'),
+                collection_process_step('Preparar eventos para enriquecimento', 'Seleciona todos os eventos historicos do dia para o tipo de enriquecimento solicitado.', $result['evaluated'] . ' eventos avaliados; limite de ' . $result['max_events_per_run'] . ' por execucao'),
                 collection_process_step('Verificar enriquecimentos existentes', 'Eventos ja cobertos por este tipo sao contabilizados sem nova chamada externa.', $result['already_enriched'] . ' eventos ja enriquecidos'),
-                collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado para todos os eventos elegiveis da data.', collection_enrichment_source_stats_text($result['source_stats'] ?? [])),
+                collection_process_step('Executar enriquecimento solicitado', 'Aplica o grupo selecionado apenas no lote permitido pela execucao atual.', $result['processed_events'] . ' eventos processados; ' . collection_enrichment_source_stats_text($result['source_stats'] ?? [])),
                 collection_process_step('Atualizar eventos enriquecidos', 'Marca eventos com enriquecimento salvo e preserva os que nao retornaram resultado.', $result['enriched_events'] . ' eventos enriquecidos'),
-                collection_process_step('Registrar itens sem fonte ou sem resultado', 'Eventos sem fonte suficiente ou sem retorno da fonte ficam disponiveis para nova tentativa futura.', $result['without_source'] . ' sem fonte; ' . $result['without_results'] . ' sem resultado'),
+                collection_process_step('Registrar itens sem fonte ou sem resultado', 'Eventos sem fonte suficiente ou sem retorno aplicavel ficam registrados para evitar chamadas repetidas na mesma fonte.', $result['without_source'] . ' sem fonte; ' . $result['without_results'] . ' sem resultado'),
                 collection_process_step('Atualizar resumo operacional do enriquecimento', 'Contadores recalculados para a tabela de status.', $summary['enrichment_records'] . ' enriquecimentos totais'),
-                collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', $result['failures'] . ' falhas registradas'),
+                collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', $result['failures'] . ' falhas registradas; ' . $result['remaining_events'] . ' eventos ainda pendentes neste tipo'),
             ];
             $processSummary = collection_process_summary($startedAt, $startedLabel, [
                 'Tipo aplicado' => $result['group_label'],
                 'Eventos avaliados' => $result['evaluated'],
                 'Ja enriquecidos' => $result['already_enriched'],
+                'Processados nesta execucao' => $result['processed_events'],
                 'Eventos enriquecidos' => $result['enriched_events'],
                 'Enriquecimentos salvos' => $result['saved_enrichments'],
+                'Ainda falta enriquecer' => $result['remaining_events'] > 0 ? $result['remaining_events'] . ' eventos; execute novamente para continuar' : 'nenhum evento pendente neste tipo',
+                'Limite operacional' => !empty($result['halted_by_budget']) ? 'atingido; execucao encerrada de forma controlada' : 'nao atingido',
                 'Sem fonte suficiente' => $result['without_source'],
                 'Sem resultado' => $result['without_results'],
                 'Falhas' => $result['failures'],
                 'Fontes consultadas' => collection_enrichment_source_stats_text($result['source_stats'] ?? []),
             ]);
-            $message = 'Processamento de enriquecimento concluido.';
+            $message = !empty($result['halted_by_budget'])
+                ? 'Enriquecimento parcial concluido. Ainda ha eventos pendentes para nova execucao.'
+                : 'Processamento de enriquecimento concluido.';
         } elseif ($action === 'process_context') {
             $failedStep = 'Consultando fonte de dados';
             $news = collect_daily_news_topics($actionDate);
@@ -336,10 +343,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
 
         const flowStepsByAction = <?= json_encode($collectionFlowSteps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         let currentFlowSteps = [];
-        let timer = null;
         let elapsedTimer = null;
         let startedAt = 0;
-        let currentStep = 0;
 
         function setButtons(disabled) {
             form.querySelectorAll('button[type="submit"]').forEach((button) => {
@@ -348,10 +353,10 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             });
         }
 
-        function renderLog(activeIndex, statuses) {
+        function renderLog(statuses) {
             const steps = (currentFlowSteps.length ? currentFlowSteps : [{ title: 'Preparando execucao' }]).map(normalizeStep);
             logEl.innerHTML = steps.map((step, index) => {
-                const status = statuses[index] || (index < activeIndex ? 'done' : index === activeIndex ? 'running' : 'pending');
+                const status = statuses[index] || 'pending';
                 const statusLabel = status === 'done' ? 'Concluido' : status === 'running' ? 'Em execucao' : status === 'error' ? 'Erro' : 'Pendente';
                 const detail = [step.description, step.result].filter(Boolean).join(' ');
                 return '<div class="process-log__item is-' + status + '">' +
@@ -361,26 +366,27 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                     '</div>';
             }).join('');
             const done = statuses.filter((status) => status === 'done').length;
-            const progress = Math.max(done, activeIndex + 1) / steps.length * 100;
+            const running = statuses.includes('running') ? 1 : 0;
+            const progress = (done + running * 0.25) / steps.length * 100;
             progressBar.style.width = Math.min(96, progress) + '%';
         }
 
         function startVisualProgress(label, action) {
-            currentStep = 0;
             startedAt = Date.now();
-            currentFlowSteps = flowStepsByAction[action] || flowStepsByAction.default || ['Preparando execucao', 'Finalizando execucao'];
+            const plannedSteps = flowStepsByAction[action] || flowStepsByAction.default || ['Preparando execucao', 'Finalizando execucao'];
+            currentFlowSteps = [{
+                title: 'Aguardando resposta do servidor',
+                description: 'A requisicao esta ativa. Sem streaming de etapas, a interface nao confirma conclusoes parciais antes do retorno final.',
+                result: ''
+            }].concat(plannedSteps);
             title.textContent = label || 'Processamento em andamento';
-            description.textContent = 'A execucao foi iniciada. O servidor esta processando a solicitacao; mantenha esta tela aberta ate o resumo final aparecer.';
+            description.textContent = 'A execucao foi enviada ao servidor. As etapas abaixo so serao marcadas como concluidas quando o servidor devolver o resumo real do processamento.';
             summaryEl.innerHTML = '';
             updateElapsed();
             progressStatus.textContent = 'Processamento em andamento';
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            renderLog(0, []);
+            renderLog(currentFlowSteps.map((_, index) => index === 0 ? 'running' : 'pending'));
             elapsedTimer = window.setInterval(updateElapsed, 1000);
-            timer = window.setInterval(() => {
-                currentStep = Math.min(currentStep + 1, currentFlowSteps.length - 1);
-                renderLog(currentStep, []);
-            }, 6500);
         }
 
         function finishVisualProgress(payload) {
@@ -389,11 +395,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             currentFlowSteps = steps.length ? steps : ['Finalizando execucao'];
             const statuses = currentFlowSteps.map(() => payload.ok ? 'done' : 'pending');
             if (!payload.ok) {
-                const errorIndex = Math.max(0, Math.min(currentStep, currentFlowSteps.length - 1));
-                for (let i = 0; i < errorIndex; i++) {
-                    statuses[i] = 'done';
-                }
-                statuses[errorIndex] = 'error';
+                statuses[0] = 'error';
             }
             title.textContent = payload.title || (payload.ok ? 'Processamento concluido' : 'Processamento interrompido');
             description.textContent = payload.ok
@@ -401,8 +403,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                 : (payload.error || 'Nao foi possivel concluir o processamento.');
             progressStatus.textContent = payload.ok ? 'Processamento concluido' : 'Processamento interrompido';
             updateElapsed(payload.summary && payload.summary.Duracao ? payload.summary.Duracao : null);
-            renderLog(currentFlowSteps.length, statuses);
-            progressBar.style.width = payload.ok ? '100%' : Math.max(12, currentStep / currentFlowSteps.length * 100) + '%';
+            renderLog(statuses);
+            progressBar.style.width = payload.ok ? '100%' : '12%';
             progressBar.classList.toggle('is-error', !payload.ok);
             renderSummary(payload.summary || {});
             if (payload.tableRows && statusRows) {
@@ -414,7 +416,6 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         }
 
         function clearTimers() {
-            window.clearInterval(timer);
             window.clearInterval(elapsedTimer);
         }
 

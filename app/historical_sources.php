@@ -274,6 +274,9 @@ function enrich_historical_events_for_day(int $month, int $day, string $group = 
     $withoutSource = 0;
     $withoutResults = 0;
     $failures = 0;
+    $processedEvents = 0;
+    $remainingEvents = 0;
+    $haltedByBudget = false;
 
     $stmt = db()->prepare(
         'SELECT e.*,
@@ -296,6 +299,8 @@ function enrich_historical_events_for_day(int $month, int $day, string $group = 
     $coverage = enrichment_group_coverage_for_events($eventIds);
     $config = require __DIR__ . '/config.php';
     $settings = $config['sources']['historical'] ?? [];
+    $maxEventsPerRun = max(1, (int) ($settings['max_enrichment_events_per_run'] ?? 20));
+    $maxDuration = max(15, (int) ($settings['max_enrichment_duration_seconds'] ?? 120));
     $availableGroups = historical_available_enrichment_groups($settings);
     $groupsToRun = $group === 'all'
         ? array_values(array_diff($availableGroups, ['all']))
@@ -319,7 +324,14 @@ function enrich_historical_events_for_day(int $month, int $day, string $group = 
                 continue;
             }
 
+            if ($processedEvents >= $maxEventsPerRun || (microtime(true) - $started) >= $maxDuration) {
+                $haltedByBudget = true;
+                $remainingEvents++;
+                continue;
+            }
+
             $result = enrich_historical_event((int) $event['id'], [], $pendingGroups);
+            $processedEvents++;
             $saved = $result['saved'];
             $withoutSource += $result['without_source'];
             $withoutResults += $result['without_results'];
@@ -341,6 +353,11 @@ function enrich_historical_events_for_day(int $month, int $day, string $group = 
         'enriched_events' => $enrichedEvents,
         'saved_enrichments' => $savedEnrichments,
         'already_enriched' => $alreadyEnriched,
+        'processed_events' => $processedEvents,
+        'remaining_events' => $remainingEvents,
+        'halted_by_budget' => $haltedByBudget,
+        'max_events_per_run' => $maxEventsPerRun,
+        'max_duration_seconds' => $maxDuration,
         'without_source' => $withoutSource,
         'without_results' => $withoutResults,
         'failures' => $failures,
@@ -390,6 +407,17 @@ function enrichment_group_coverage_for_events(array $eventIds): array
         foreach (enrichment_groups_for_source_role((string) $row['source'], (string) $row['role']) as $group) {
             $coverage[(int) $row['event_id']][$group] = true;
         }
+    }
+
+    $stmt = db()->prepare(
+        'SELECT event_id, enrichment_group
+         FROM event_enrichment_statuses
+         WHERE event_id IN (' . $placeholders . ')
+           AND status IN ("done", "empty", "skipped")'
+    );
+    $stmt->execute($eventIds);
+    foreach ($stmt->fetchAll() as $row) {
+        $coverage[(int) $row['event_id']][(string) $row['enrichment_group']] = true;
     }
 
     return $coverage;

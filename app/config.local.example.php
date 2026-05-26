@@ -17,6 +17,8 @@ return [
             'user_agent' => 'PossibilismosMVP/0.1 (email-ou-url-de-contato)',
         ],
         'historical' => [
+            'max_enrichment_events_per_run' => 20,
+            'max_enrichment_duration_seconds' => 120,
             'europeana' => [
                 'enabled' => false,
                 'api_key' => 'INFORME_A_CHAVE_SE_USAR_EUROPEANA',
