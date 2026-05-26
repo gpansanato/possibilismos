@@ -46,6 +46,7 @@ CREATE TABLE event_imports (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     run_date DATE NOT NULL,
     source VARCHAR(120) NOT NULL,
+    source_variant VARCHAR(120) NOT NULL DEFAULT 'default',
     source_type VARCHAR(80) NOT NULL,
     source_event_id VARCHAR(190) NOT NULL,
     source_url VARCHAR(500) NULL,
@@ -65,6 +66,7 @@ CREATE TABLE event_imports (
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     UNIQUE KEY uniq_event_import_source_id (source, source_event_id),
+    INDEX idx_event_imports_source_variant (source, source_variant),
     INDEX idx_event_import_source_key (source, normalized_key),
     INDEX idx_event_imports_run_date (run_date),
     INDEX idx_event_imports_canonical_event (canonical_event_id)
@@ -74,6 +76,7 @@ CREATE TABLE event_sources (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     event_id INT UNSIGNED NOT NULL,
     source VARCHAR(120) NOT NULL,
+    source_variant VARCHAR(120) NOT NULL DEFAULT 'default',
     source_event_id VARCHAR(190) NOT NULL,
     source_url VARCHAR(500) NULL,
     source_title VARCHAR(255) NULL,
@@ -84,6 +87,7 @@ CREATE TABLE event_sources (
     updated_at DATETIME NOT NULL,
     UNIQUE KEY uniq_event_source (event_id, source, source_event_id),
     INDEX idx_event_sources_event (event_id),
+    INDEX idx_event_sources_source_variant (source, source_variant),
     INDEX idx_event_sources_source_id (source, source_event_id),
     CONSTRAINT fk_event_sources_event
         FOREIGN KEY (event_id) REFERENCES events(id)

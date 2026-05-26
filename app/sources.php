@@ -73,7 +73,7 @@ function http_get_json(string $url, string $userAgent, array $headers = []): ?st
     return is_string($body) ? $body : null;
 }
 
-function save_wikimedia_event(array $event, int $month, int $day, string $language, string $type, ?string $runDate = null): bool
+function save_wikimedia_event(array $event, int $month, int $day, string $language, string $type, ?string $runDate = null, string $sourceVariant = 'on_this_day'): bool
 {
     if (empty($event['text']) || !isset($event['year'])) {
         return false;
@@ -110,6 +110,7 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
     ];
     $source = [
         'source' => 'Wikipedia / Wikimedia',
+        'source_variant' => $sourceVariant,
         'source_event_id' => $sourceEventId,
         'source_url' => $sourceUrl,
         'title' => $title,
@@ -120,6 +121,7 @@ function save_wikimedia_event(array $event, int $month, int $day, string $langua
     $import = [
         'run_date' => $runDate ?: historical_import_run_date($month, $day),
         'source' => 'Wikipedia / Wikimedia',
+        'source_variant' => $sourceVariant,
         'source_type' => $type,
         'source_event_id' => $sourceEventId,
         'source_url' => $sourceUrl,

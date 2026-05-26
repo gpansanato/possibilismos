@@ -40,20 +40,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processDescription = 'Coleta, normalizacao, deduplicacao e enriquecimento dos fatos historicos da data selecionada.';
             $processSteps = [
                 collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fluxo iniciado.', '1 data processada'),
-                collection_process_step('Consultar Wikidata para eventos historicos do dia', 'Fonte estrutural consultada para identificar fatos associados ao dia.', $result['imported'] . ' registros recebidos/processados'),
-                collection_process_step('Acionar apoio Wikimedia quando necessario', 'Fontes de apoio consultadas durante descoberta e enriquecimento.', $summary['enrichment_records'] . ' registros de apoio salvos'),
+                collection_process_step('Executar matriz de coletores historicos', 'Wikidata roda como fonte principal e Wikimedia On This Day roda sempre em pt, en e es quando configurado.', ($result['found'] ?? $result['imported']) . ' candidatos encontrados'),
                 collection_process_step('Normalizar titulo, data, ano, origem e chave canonica', 'Registros tratados para preservar origem, data, ano e chave canonica.', $imports['linked'] . ' imports vinculados'),
                 collection_process_step('Verificar duplicidades nos eventos e imports', 'Comparacao aplicada antes de gravar novos eventos.', $imports['ignored'] . ' registros ignorados por duplicidade'),
                 collection_process_step('Salvar ou atualizar eventos historicos coletados', 'Eventos canonicos persistidos ou vinculados a imports existentes.', $summary['total'] . ' eventos historicos na base para o dia'),
-                collection_process_step('Executar enriquecimento integrado nas fontes ativas', 'Descricoes, imagens e materiais complementares incorporados quando disponiveis.', $summary['enriched'] . ' eventos enriquecidos'),
+                collection_process_step('Executar enriquecimento leve integrado', 'Resumo Wikipedia, Commons e Wikidata complementar podem ser incorporados durante a coleta. Enriquecimentos documental, visual, geografico e academico permanecem separados.', $summary['enriched'] . ' eventos enriquecidos'),
                 collection_process_step('Atualizar resumo operacional da coleta', 'Contadores recalculados para a tabela de status.', $summary['enrichment_records'] . ' enriquecimentos salvos'),
                 collection_process_step('Finalizar execucao', 'Resumo final devolvido para a interface.', $imports['errors'] . ' falhas registradas'),
             ];
+            foreach (array_slice($result['collectors'] ?? [], 0, 12) as $collector) {
+                $processSteps[] = collection_process_step(
+                    $collector['source'] . ' / ' . $collector['source_variant'],
+                    'Coletor executado dentro da matriz de eventos historicos.',
+                    $collector['found'] . ' encontrados; ' . $collector['imported'] . ' importados; ' . $collector['enriched'] . ' enriquecimentos; ' . $collector['failures'] . ' falhas; ' . number_format((float) $collector['duration'], 1, ',', '.') . 's'
+                );
+            }
             $processSummary = collection_process_summary($startedAt, $startedLabel, [
-                'Registros encontrados' => $result['imported'],
-                'Novos ou atualizados' => $imports['linked'],
+                'Encontrados' => $result['found'] ?? $result['imported'],
+                'Importados' => $result['imported'],
+                'Novos' => $imports['linked'],
+                'Atualizados' => $imports['linked'],
                 'Ignorados por duplicidade' => $imports['ignored'],
-                'Falhas' => $imports['errors'],
+                'Enriquecidos' => $result['enriched'] ?? $summary['enriched'],
+                'Falhas' => ($result['failures'] ?? 0) + $imports['errors'],
             ]);
             $message = 'Processamento de eventos historicos concluido.';
         } elseif ($action === 'process_context') {
@@ -496,11 +505,11 @@ function collection_flow_steps(): array
         'process_events' => [
             collection_process_step('Preparar execucao para a data selecionada', 'Valida a data, monta parametros da coleta e registra o inicio do fluxo.', 'Quantidade tratada: aguardando retorno do servidor.'),
             collection_process_step('Consultar Wikidata para eventos historicos do dia', 'Busca fatos historicos associados ao dia e mes selecionados.', 'Quantidade tratada: eventos encontrados na fonte.'),
-            collection_process_step('Acionar apoio Wikimedia quando necessario', 'Complementa a descoberta quando a fonte estrutural nao retorna contexto suficiente.', 'Quantidade tratada: registros de apoio consultados.'),
+            collection_process_step('Executar Wikimedia On This Day', 'Coleta efemerides em pt, en e es como fonte paralela, nao apenas fallback.', 'Quantidade tratada: candidatos Wikimedia consultados.'),
             collection_process_step('Normalizar titulo, data, ano, origem e chave canonica', 'Remove duplicidade textual, separa ano/data e prepara a chave canonica do evento.', 'Quantidade tratada: registros importados normalizados.'),
             collection_process_step('Verificar duplicidades nos eventos e imports', 'Compara fonte, chave canonica, titulo, ano e data historica antes de gravar.', 'Quantidade tratada: novos, vinculados e ignorados por duplicidade.'),
             collection_process_step('Salvar ou atualizar eventos historicos coletados', 'Persiste o evento canonico ou atualiza o vinculo de importacao existente.', 'Quantidade tratada: eventos salvos ou atualizados.'),
-            collection_process_step('Executar enriquecimento integrado nas fontes ativas', 'Busca resumos, imagens, documentos e referencias complementares quando disponiveis.', 'Quantidade tratada: enriquecimentos gravados.'),
+            collection_process_step('Executar enriquecimento leve integrado', 'Aplica apenas enriquecimento leve durante a coleta principal; demais enriquecimentos ficam separados.', 'Quantidade tratada: enriquecimentos leves gravados.'),
             collection_process_step('Atualizar resumo operacional da coleta', 'Recalcula contadores exibidos na tabela de status dos processamentos.', 'Quantidade tratada: total consolidado para a data.'),
             collection_process_step('Finalizar execucao', 'Fecha o fluxo e devolve o resumo da execucao para a interface.', 'Quantidade tratada: resumo final.'),
         ],

@@ -4,37 +4,166 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
 {
     $config = require __DIR__ . '/config.php';
     $settings = $config['sources']['historical'] ?? [];
+    $wikimediaSettings = $config['sources']['wikimedia'] ?? [];
     $maxImport = (int) ($settings['max_import'] ?? 35);
+    $maxTotal = $maxImport + (int) ($wikimediaSettings['max_import'] ?? 30);
     $imported = 0;
     $enriched = 0;
+    $found = 0;
+    $failures = 0;
+    $collectorStats = [];
+    $started = microtime(true);
+
+    foreach (historical_event_collectors($settings, $wikimediaSettings) as $collector) {
+        $variantStarted = microtime(true);
+        $variantFound = 0;
+        $variantImported = 0;
+        $variantEnriched = 0;
+        $variantFailures = 0;
+
+        try {
+            $candidates = collect_historical_event_candidates($collector, $month, $day, $settings);
+            $variantFound = count($candidates);
+            $found += $variantFound;
+
+            foreach ($candidates as $candidate) {
+                if ($imported >= $maxTotal) {
+                    break;
+                }
+
+                $eventId = persist_historical_event_candidate($candidate, $month, $day, $runDate);
+                if ($eventId > 0) {
+                    $imported++;
+                    $variantImported++;
+                    $savedEnrichments = enrich_historical_event($eventId, $candidate['payload'] ?? [], ['light']);
+                    $enriched += $savedEnrichments;
+                    $variantEnriched += $savedEnrichments;
+                }
+            }
+        } catch (Throwable $e) {
+            $failures++;
+            $variantFailures++;
+        }
+
+        $collectorStats[] = [
+            'source' => $collector['source'],
+            'source_variant' => $collector['source_variant'],
+            'found' => $variantFound,
+            'imported' => $variantImported,
+            'enriched' => $variantEnriched,
+            'failures' => $variantFailures,
+            'duration' => round(max(0, microtime(true) - $variantStarted), 2),
+        ];
+
+        if ($imported >= $maxTotal) {
+            break;
+        }
+    }
+
+    return [
+        'found' => $found,
+        'imported' => $imported,
+        'enriched' => $enriched,
+        'failures' => $failures,
+        'duration' => round(max(0, microtime(true) - $started), 2),
+        'collectors' => $collectorStats,
+    ];
+}
+
+function historical_event_collectors(array $settings, array $wikimediaSettings): array
+{
+    $collectors = [];
 
     if (!empty($settings['enabled']) && !empty($settings['wikidata']['enabled'])) {
-        foreach (fetch_wikidata_events_for_day($month, $day, $settings) as $event) {
-            if ($imported >= $maxImport) {
-                break;
-            }
+        foreach (wikidata_collector_variants() as $variant => $definition) {
+            $collectors[] = [
+                'source' => 'Wikidata',
+                'source_variant' => $variant,
+                'definition' => $definition,
+            ];
+        }
+    }
 
-            $eventId = save_wikidata_historical_event($event, $month, $day, $runDate);
-            if ($eventId > 0) {
-                $imported++;
-                $enriched += enrich_historical_event($eventId, $event);
+    if (!empty($wikimediaSettings['enabled'])) {
+        foreach (($wikimediaSettings['languages'] ?? ['pt', 'en', 'es']) as $language) {
+            foreach (($wikimediaSettings['types'] ?? ['selected', 'events']) as $type) {
+                $collectors[] = [
+                    'source' => 'Wikipedia / Wikimedia',
+                    'source_variant' => 'on_this_day_' . $language . '_' . $type,
+                    'language' => $language,
+                    'type' => $type,
+                ];
             }
         }
     }
 
-    if ($imported === 0) {
-        $imported = import_historical_events_from_wikimedia($month, $day, $maxImport, $runDate);
+    return $collectors;
+}
+
+function collect_historical_event_candidates(array $collector, int $month, int $day, array $settings): array
+{
+    if ($collector['source'] === 'Wikidata') {
+        return array_map(
+            static fn($row) => [
+                'source' => 'Wikidata',
+                'source_variant' => $collector['source_variant'],
+                'payload' => $row,
+            ],
+            fetch_wikidata_events_for_day($month, $day, $settings, $collector['definition'], $collector['source_variant'])
+        );
     }
 
+    if ($collector['source'] === 'Wikipedia / Wikimedia') {
+        return array_map(
+            static fn($event) => [
+                'source' => 'Wikipedia / Wikimedia',
+                'source_variant' => $collector['source_variant'],
+                'language' => $collector['language'],
+                'type' => $collector['type'],
+                'payload' => $event,
+            ],
+            fetch_wikimedia_on_this_day($collector['language'], $collector['type'], $month, $day)
+        );
+    }
+
+    return [];
+}
+
+function persist_historical_event_candidate(array $candidate, int $month, int $day, ?string $runDate = null): int
+{
+    if (($candidate['source'] ?? '') === 'Wikidata') {
+        return save_wikidata_historical_event($candidate['payload'] ?? [], $month, $day, $runDate, $candidate['source_variant'] ?? 'point_in_time');
+    }
+
+    if (($candidate['source'] ?? '') === 'Wikipedia / Wikimedia') {
+        return save_wikimedia_event($candidate['payload'] ?? [], $month, $day, $candidate['language'] ?? 'en', $candidate['type'] ?? 'events', $runDate, $candidate['source_variant'] ?? 'on_this_day');
+    }
+
+    return 0;
+}
+
+function wikidata_collector_variants(): array
+{
     return [
-        'imported' => $imported,
-        'enriched' => $enriched,
+        'point_in_time' => ['date_property' => 'P585'],
+        'start_time' => ['date_property' => 'P580'],
+        'end_time' => ['date_property' => 'P582'],
+        'political_events' => ['date_property' => 'P585', 'keywords' => ['election', 'treaty', 'government', 'revolution', 'political']],
+        'conflicts' => ['date_property' => 'P585', 'keywords' => ['battle', 'war', 'conflict', 'siege', 'invasion']],
+        'discoveries_inventions' => ['date_property' => 'P585', 'keywords' => ['discovery', 'invention', 'first', 'patent']],
+        'works_publications' => ['date_property' => 'P577', 'keywords' => ['book', 'publication', 'film', 'album', 'work']],
+        'births_deaths' => ['date_property' => 'P569', 'source_type' => 'birth'],
+        'deaths' => ['date_property' => 'P570', 'source_type' => 'death'],
     ];
 }
 
-function fetch_wikidata_events_for_day(int $month, int $day, array $settings): array
+function fetch_wikidata_events_for_day(int $month, int $day, array $settings, ?array $variant = null, string $sourceVariant = 'point_in_time'): array
 {
+    $variant = $variant ?: ['date_property' => 'P585'];
     $endpoint = $settings['wikidata']['endpoint'] ?? 'https://query.wikidata.org/sparql';
+    $dateProperty = preg_replace('/[^A-Z0-9]/', '', (string) ($variant['date_property'] ?? 'P585'));
+    $sourceType = $variant['source_type'] ?? 'historical_event';
+    $limit = wikidata_variant_limit($settings, $sourceVariant);
     $query = '
 SELECT ?item ?itemLabel ?date
        (GROUP_CONCAT(DISTINCT ?typeLabel; separator="|") AS ?typeLabels)
@@ -43,7 +172,7 @@ SELECT ?item ?itemLabel ?date
        (GROUP_CONCAT(DISTINCT ?causeLabel; separator="|") AS ?causeLabels)
        (GROUP_CONCAT(DISTINCT ?effectLabel; separator="|") AS ?effectLabels)
        ?placeLabel ?coord ?countryLabel ?adminLabel ?article WHERE {
-  ?item wdt:P585 ?date.
+  ?item wdt:' . $dateProperty . ' ?date.
   FILTER(MONTH(?date) = ' . (int) $month . ' && DAY(?date) = ' . (int) $day . ')
   OPTIONAL { ?item wdt:P31 ?type. }
   OPTIONAL { ?item wdt:P276 ?place. }
@@ -61,7 +190,7 @@ SELECT ?item ?itemLabel ?date
   SERVICE wikibase:label { bd:serviceParam wikibase:language "pt,en". }
 }
 GROUP BY ?item ?itemLabel ?date ?placeLabel ?coord ?countryLabel ?adminLabel ?article
-LIMIT ' . (int) ($settings['max_import'] ?? 35);
+LIMIT ' . $limit;
 
     $url = $endpoint . '?' . http_build_query([
         'query' => $query,
@@ -73,10 +202,50 @@ LIMIT ' . (int) ($settings['max_import'] ?? 35);
         return [];
     }
 
-    return $data['results']['bindings'];
+    $rows = array_map(static function (array $row) use ($sourceVariant, $sourceType, $dateProperty): array {
+        $row['_source_variant'] = ['value' => $sourceVariant];
+        $row['_source_type'] = ['value' => $sourceType];
+        $row['_date_property'] = ['value' => $dateProperty];
+        return $row;
+    }, $data['results']['bindings']);
+
+    return wikidata_filter_variant_rows($rows, $variant['keywords'] ?? []);
 }
 
-function save_wikidata_historical_event(array $row, int $month, int $day, ?string $runDate = null): int
+function wikidata_variant_limit(array $settings, string $sourceVariant): int
+{
+    $variantLimits = $settings['wikidata']['variant_limits'] ?? [];
+    $limit = (int) ($variantLimits[$sourceVariant] ?? min(12, (int) ($settings['max_import'] ?? 35)));
+
+    return max(1, $limit);
+}
+
+function wikidata_filter_variant_rows(array $rows, array $keywords): array
+{
+    $keywords = array_values(array_filter(array_map(static fn($keyword) => mb_strtolower((string) $keyword, 'UTF-8'), $keywords)));
+    if (!$keywords) {
+        return $rows;
+    }
+
+    return array_values(array_filter($rows, static function (array $row) use ($keywords): bool {
+        $haystack = mb_strtolower(implode(' ', [
+            $row['itemLabel']['value'] ?? '',
+            $row['typeLabels']['value'] ?? '',
+            $row['participantLabels']['value'] ?? '',
+            $row['partOfLabels']['value'] ?? '',
+        ]), 'UTF-8');
+
+        foreach ($keywords as $keyword) {
+            if (mb_strpos($haystack, $keyword, 0, 'UTF-8') !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }));
+}
+
+function save_wikidata_historical_event(array $row, int $month, int $day, ?string $runDate = null, string $sourceVariant = 'point_in_time'): int
 {
     $itemUrl = $row['item']['value'] ?? '';
     $wikidataId = wikidata_id_from_url($itemUrl);
@@ -121,7 +290,8 @@ function save_wikidata_historical_event(array $row, int $month, int $day, ?strin
     ];
     $source = [
         'source' => 'Wikidata',
-        'source_event_id' => $wikidataId,
+        'source_variant' => $sourceVariant,
+        'source_event_id' => $sourceVariant . ':' . $wikidataId,
         'source_url' => $itemUrl ?: null,
         'title' => $label,
         'description' => trim(($type ? 'Tipo: ' . $type . '. ' : '') . ($place ? 'Local: ' . $place . '.' : '')),
@@ -131,8 +301,9 @@ function save_wikidata_historical_event(array $row, int $month, int $day, ?strin
     $import = [
         'run_date' => $runDate ?: historical_import_run_date($month, $day),
         'source' => 'Wikidata',
-        'source_type' => 'historical_event',
-        'source_event_id' => $wikidataId,
+        'source_variant' => $sourceVariant,
+        'source_type' => clean_context_text($row['_source_type']['value'] ?? 'historical_event'),
+        'source_event_id' => $sourceVariant . ':' . $wikidataId,
         'source_url' => $itemUrl ?: null,
         'event_month' => $month,
         'event_day' => $day,
@@ -240,7 +411,7 @@ function import_historical_events_from_wikimedia(int $month, int $day, int $maxI
     return $imported;
 }
 
-function enrich_historical_event(int $eventId, array $seed = []): int
+function enrich_historical_event(int $eventId, array $seed = [], ?array $enabledGroups = null): int
 {
     $event = event_by_id($eventId);
     if (!$event) {
@@ -251,24 +422,14 @@ function enrich_historical_event(int $eventId, array $seed = []): int
     $settings = $config['sources']['historical'] ?? [];
     $saved = 0;
 
-    $article = $seed['article']['value'] ?? '';
-    if (!empty($settings['wikipedia']['enabled']) && $article !== '') {
-        $saved += enrich_event_from_wikipedia($event, $article, $settings);
-    }
-    if (!empty($settings['library_of_congress']['enabled'])) {
-        $saved += enrich_event_from_library_of_congress($event, $settings);
-    }
-    if (!empty($settings['europeana']['enabled']) && !empty($settings['europeana']['api_key'])) {
-        $saved += enrich_event_from_europeana($event, $settings['europeana']);
-    }
-    if (!empty($settings['smithsonian']['enabled']) && !empty($settings['smithsonian']['api_key'])) {
-        $saved += enrich_event_from_smithsonian($event, $settings['smithsonian']);
-    }
-    if (!empty($settings['dpla']['enabled']) && !empty($settings['dpla']['api_key'])) {
-        $saved += enrich_event_from_dpla($event, $settings['dpla']);
-    }
-    if (!empty($settings['openhistoricalmap']['enabled']) && !empty($settings['openhistoricalmap']['url'])) {
-        $saved += enrich_event_from_openhistoricalmap($event, $settings['openhistoricalmap']);
+    foreach (historical_enrichment_groups($event, $seed, $settings) as $groupKey => $group) {
+        if ($enabledGroups !== null && !in_array($groupKey, $enabledGroups, true)) {
+            continue;
+        }
+
+        foreach ($group['steps'] as $step) {
+            $saved += $step();
+        }
     }
 
     if ($saved > 0) {
@@ -276,6 +437,56 @@ function enrich_historical_event(int $eventId, array $seed = []): int
     }
 
     return $saved;
+}
+
+function historical_enrichment_groups(array $event, array $seed, array $settings): array
+{
+    $article = $seed['article']['value'] ?? '';
+
+    return [
+        'light' => [
+            'label' => 'Enriquecimento leve',
+            'steps' => [
+                static fn() => !empty($settings['wikipedia']['enabled']) && $article !== ''
+                    ? enrich_event_from_wikipedia($event, $article, $settings)
+                    : 0,
+            ],
+        ],
+        'documental' => [
+            'label' => 'Enriquecimento documental',
+            'steps' => [
+                static fn() => !empty($settings['library_of_congress']['enabled'])
+                    ? enrich_event_from_library_of_congress($event, $settings)
+                    : 0,
+                static fn() => !empty($settings['europeana']['enabled']) && !empty($settings['europeana']['api_key'])
+                    ? enrich_event_from_europeana($event, $settings['europeana'])
+                    : 0,
+                static fn() => !empty($settings['dpla']['enabled']) && !empty($settings['dpla']['api_key'])
+                    ? enrich_event_from_dpla($event, $settings['dpla'])
+                    : 0,
+            ],
+        ],
+        'visual' => [
+            'label' => 'Enriquecimento visual',
+            'steps' => [
+                static fn() => !empty($settings['smithsonian']['enabled']) && !empty($settings['smithsonian']['api_key'])
+                    ? enrich_event_from_smithsonian($event, $settings['smithsonian'])
+                    : 0,
+            ],
+        ],
+        'geographic' => [
+            'label' => 'Enriquecimento geografico',
+            'steps' => [
+                static fn() => !empty($settings['openhistoricalmap']['enabled']) && !empty($settings['openhistoricalmap']['url'])
+                    ? enrich_event_from_openhistoricalmap($event, $settings['openhistoricalmap'])
+                    : 0,
+            ],
+        ],
+        'academic' => [
+            'label' => 'Enriquecimento academico',
+            'steps' => [],
+        ],
+    ];
 }
 
 function enrich_event_from_wikipedia(array $event, string $articleUrl, array $settings): int

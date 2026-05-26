@@ -59,11 +59,12 @@ function save_event_import(array $item): int
 
     $stmt = db()->prepare(
         'INSERT INTO event_imports
-         (run_date, source, source_type, source_event_id, source_url, event_month, event_day, event_year,
+         (run_date, source, source_variant, source_type, source_event_id, source_url, event_month, event_day, event_year,
           raw_title, raw_description, raw_category, raw_location, raw_language, raw_payload_json,
           normalized_key, canonical_event_id, status, error_message, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
          ON DUPLICATE KEY UPDATE
+            source_variant = VALUES(source_variant),
             source_url = VALUES(source_url),
             raw_title = VALUES(raw_title),
             raw_description = VALUES(raw_description),
@@ -80,6 +81,7 @@ function save_event_import(array $item): int
     $stmt->execute([
         $item['run_date'],
         $source,
+        clean_context_text($item['source_variant'] ?? 'default') ?: 'default',
         clean_context_text($item['source_type'] ?? 'historical_event'),
         mb_substr($sourceEventId, 0, 190, 'UTF-8'),
         $item['source_url'] ?? null,
@@ -119,9 +121,10 @@ function save_event_source(int $eventId, array $item): void
 
     $stmt = db()->prepare(
         'INSERT INTO event_sources
-         (event_id, source, source_event_id, source_url, source_title, source_description, source_language, confidence_score, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+         (event_id, source, source_variant, source_event_id, source_url, source_title, source_description, source_language, confidence_score, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
          ON DUPLICATE KEY UPDATE
+            source_variant = VALUES(source_variant),
             source_url = VALUES(source_url),
             source_title = VALUES(source_title),
             source_description = VALUES(source_description),
@@ -132,6 +135,7 @@ function save_event_source(int $eventId, array $item): void
     $stmt->execute([
         $eventId,
         $source,
+        clean_context_text($item['source_variant'] ?? 'default') ?: 'default',
         mb_substr($sourceEventId, 0, 190, 'UTF-8'),
         $item['source_url'] ?? null,
         mb_substr(clean_context_text($item['title'] ?? ''), 0, 255, 'UTF-8'),
