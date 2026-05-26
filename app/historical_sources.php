@@ -7,14 +7,27 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
     $wikimediaSettings = $config['sources']['wikimedia'] ?? [];
     $maxImport = (int) ($settings['max_import'] ?? 35);
     $maxTotal = $maxImport + (int) ($wikimediaSettings['max_import'] ?? 30);
+    $maxCollectors = max(1, (int) ($settings['max_collectors_per_run'] ?? 6));
+    $maxDuration = max(20, (int) ($settings['max_duration_seconds'] ?? 120));
+    $maxEnrichDuringCollection = max(0, (int) ($settings['max_enrich_during_collection'] ?? 6));
     $imported = 0;
     $enriched = 0;
     $found = 0;
     $failures = 0;
+    $processedCollectors = 0;
+    $skippedCollectors = 0;
+    $haltedByBudget = false;
     $collectorStats = [];
     $started = microtime(true);
 
     foreach (historical_event_collectors($settings, $wikimediaSettings) as $collector) {
+        if ($processedCollectors >= $maxCollectors || (microtime(true) - $started) >= $maxDuration) {
+            $skippedCollectors++;
+            $haltedByBudget = true;
+            continue;
+        }
+
+        $processedCollectors++;
         $variantStarted = microtime(true);
         $variantFound = 0;
         $variantImported = 0;
@@ -35,9 +48,11 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
                 if ($eventId > 0) {
                     $imported++;
                     $variantImported++;
-                    $savedEnrichments = enrich_historical_event($eventId, $candidate['payload'] ?? [], ['light']);
-                    $enriched += $savedEnrichments;
-                    $variantEnriched += $savedEnrichments;
+                    if ($enriched < $maxEnrichDuringCollection) {
+                        $savedEnrichments = enrich_historical_event($eventId, $candidate['payload'] ?? [], ['light']);
+                        $enriched += $savedEnrichments;
+                        $variantEnriched += $savedEnrichments;
+                    }
                 }
             }
         } catch (Throwable $e) {
@@ -65,6 +80,9 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
         'imported' => $imported,
         'enriched' => $enriched,
         'failures' => $failures,
+        'processed_collectors' => $processedCollectors,
+        'skipped_collectors' => $skippedCollectors,
+        'halted_by_budget' => $haltedByBudget,
         'duration' => round(max(0, microtime(true) - $started), 2),
         'collectors' => $collectorStats,
     ];
@@ -73,10 +91,12 @@ function collect_historical_events_for_day(int $month, int $day, ?string $runDat
 function historical_event_collectors(array $settings, array $wikimediaSettings): array
 {
     $collectors = [];
+    $wikidataVariants = [];
+    $wikimediaCollectors = [];
 
     if (!empty($settings['enabled']) && !empty($settings['wikidata']['enabled'])) {
-        foreach (wikidata_collector_variants() as $variant => $definition) {
-            $collectors[] = [
+        foreach (wikidata_priority_collector_variants() as $variant => $definition) {
+            $wikidataVariants[$variant] = [
                 'source' => 'Wikidata',
                 'source_variant' => $variant,
                 'definition' => $definition,
@@ -87,7 +107,7 @@ function historical_event_collectors(array $settings, array $wikimediaSettings):
     if (!empty($wikimediaSettings['enabled'])) {
         foreach (($wikimediaSettings['languages'] ?? ['pt', 'en', 'es']) as $language) {
             foreach (($wikimediaSettings['types'] ?? ['selected', 'events']) as $type) {
-                $collectors[] = [
+                $wikimediaCollectors[] = [
                     'source' => 'Wikipedia / Wikimedia',
                     'source_variant' => 'on_this_day_' . $language . '_' . $type,
                     'language' => $language,
@@ -97,7 +117,52 @@ function historical_event_collectors(array $settings, array $wikimediaSettings):
         }
     }
 
+    if (isset($wikidataVariants['point_in_time'])) {
+        $collectors[] = $wikidataVariants['point_in_time'];
+        unset($wikidataVariants['point_in_time']);
+    }
+
+    foreach ($wikimediaCollectors as $index => $collector) {
+        if (($collector['type'] ?? '') === 'selected') {
+            $collectors[] = $collector;
+            unset($wikimediaCollectors[$index]);
+        }
+    }
+
+    foreach ($wikidataVariants as $collector) {
+        $collectors[] = $collector;
+    }
+
+    foreach ($wikimediaCollectors as $collector) {
+        $collectors[] = $collector;
+    }
+
     return $collectors;
+}
+
+function wikidata_priority_collector_variants(): array
+{
+    $variants = wikidata_collector_variants();
+    $orderedKeys = [
+        'point_in_time',
+        'start_time',
+        'end_time',
+        'conflicts',
+        'political_events',
+        'discoveries_inventions',
+        'works_publications',
+        'births_deaths',
+        'deaths',
+    ];
+
+    $ordered = [];
+    foreach ($orderedKeys as $key) {
+        if (isset($variants[$key])) {
+            $ordered[$key] = $variants[$key];
+        }
+    }
+
+    return $ordered;
 }
 
 function collect_historical_event_candidates(array $collector, int $month, int $day, array $settings): array

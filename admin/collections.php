@@ -63,6 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'Ignorados por duplicidade' => $imports['ignored'],
                 'Enriquecidos' => $result['enriched'] ?? $summary['enriched'],
                 'Falhas' => ($result['failures'] ?? 0) + $imports['errors'],
+                'Coletores executados' => $result['processed_collectors'] ?? 0,
+                'Coletores pendentes' => $result['skipped_collectors'] ?? 0,
+                'Limite operacional' => !empty($result['halted_by_budget']) ? 'atingido' : 'nao atingido',
             ]);
             $message = 'Processamento de eventos historicos concluido.';
         } elseif ($action === 'process_context') {

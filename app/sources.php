@@ -48,7 +48,7 @@ function http_get_json(string $url, string $userAgent, array $headers = []): ?st
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 20,
+            CURLOPT_TIMEOUT => 10,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_USERAGENT => $userAgent,
             CURLOPT_HTTPHEADER => $requestHeaders,
@@ -64,7 +64,7 @@ function http_get_json(string $url, string $userAgent, array $headers = []): ?st
     $context = stream_context_create([
         'http' => [
             'method' => 'GET',
-            'timeout' => 20,
+            'timeout' => 10,
             'header' => implode("\r\n", array_merge(['User-Agent: ' . $userAgent], $requestHeaders)),
         ],
     ]);

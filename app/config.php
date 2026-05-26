@@ -32,10 +32,24 @@ $config = [
         'historical' => [
             'enabled' => true,
             'max_import' => 35,
+            'max_collectors_per_run' => 6,
+            'max_duration_seconds' => 120,
+            'max_enrich_during_collection' => 6,
             'max_enrichments_per_source' => 1,
             'wikidata' => [
                 'enabled' => true,
                 'endpoint' => 'https://query.wikidata.org/sparql',
+                'variant_limits' => [
+                    'point_in_time' => 8,
+                    'start_time' => 5,
+                    'end_time' => 5,
+                    'political_events' => 5,
+                    'conflicts' => 5,
+                    'discoveries_inventions' => 5,
+                    'works_publications' => 5,
+                    'births_deaths' => 5,
+                    'deaths' => 5,
+                ],
             ],
             'wikipedia' => [
                 'enabled' => true,
