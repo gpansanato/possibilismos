@@ -215,6 +215,11 @@ $rankingCount = rankings_count_for_date($date);
 
 $collectionRows = collection_status_rows($date, $eventCounts, $historicalSummary, $importSummary, $newsCount, $trendCount, $topicsCount, $rankingCount);
 $collectionFlowSteps = collection_flow_steps();
+$enrichmentGroupOptions = array_filter(
+    historical_available_enrichment_group_labels(),
+    static fn($key) => $key !== 'all',
+    ARRAY_FILTER_USE_KEY
+);
 
 render_page_start('Coletas', 'collections', 'admin', 'Home operacional para executar e acompanhar os processamentos por data.');
 ?>
@@ -250,8 +255,15 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                 <div class="operation-card">
                     <span>2</span>
                     <strong>Enriquecimento</strong>
-                    <p>Executa todos os grupos ativos de enriquecimento para os eventos da data.</p>
+                    <p>Executa um tipo de enriquecimento por vez para os eventos da data.</p>
                     <small><?= h((string) $historicalSummary['total']) ?> eventos na data; <?= h((string) $historicalSummary['not_enriched']) ?> ainda sem enriquecimento marcado.</small>
+                    <label class="operation-card__field">Tipo
+                        <select name="enrichment_group" id="collection-enrichment-group">
+                            <?php foreach ($enrichmentGroupOptions as $groupKey => $groupLabel): ?>
+                                <option value="<?= h($groupKey) ?>"><?= h($groupLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
                     <div class="operation-card__actions">
                         <button class="button-secondary" name="action" value="process_enrichment" type="submit" data-process-type="event_enrichment" data-process-label="Enriquecimento de eventos">Enriquecer eventos</button>
                     </div>
@@ -352,6 +364,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         const statusDate = document.getElementById('collection-status-date');
         const dateInput = document.getElementById('collection-date-input');
         const processDate = document.getElementById('collection-process-date');
+        const enrichmentGroup = document.getElementById('collection-enrichment-group');
         const resetCollectors = form.querySelector('[name="reset_collectors"]');
         if (!form || !panel || !logEl || !progressBar) {
             return;
@@ -474,7 +487,8 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             }
 
             if (summary['Processados nesta chamada']) {
-                return summary['Ainda sem enriquecimento marcado'] && parseInt(summary['Ainda sem enriquecimento marcado'], 10) > 0 ? '68%' : '92%';
+                const pendingInGroup = parseInt(summary['Pendentes neste tipo'] || '0', 10);
+                return pendingInGroup > 0 ? '68%' : '92%';
             }
 
             return '24%';
@@ -489,6 +503,9 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             startData.set('process_type', processType);
             startData.set('date', dateInput && dateInput.value ? dateInput.value : processDate.value);
             startData.set('reset_collectors', submitter.dataset.resetCollectors === '1' ? '1' : '0');
+            if (processType === 'event_enrichment' && enrichmentGroup) {
+                startData.set('enrichment_group', enrichmentGroup.value || 'light');
+            }
             const startPayload = await postProcessRequest(startData);
             renderProcessingRun(startPayload);
 

@@ -1018,6 +1018,18 @@ button.is-loading {
     font-size: 12px;
 }
 
+.operation-card__field {
+    display: grid;
+    gap: 6px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.operation-card__field select {
+    width: 100%;
+}
+
 .operation-card__actions {
     display: flex;
     flex-wrap: wrap;

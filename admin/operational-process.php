@@ -20,7 +20,7 @@ try {
         }
 
         $runId = create_processing_run($processType, $runDate, operational_start_label($processType));
-        update_processing_run_state($runId, operational_initial_state($processType));
+        update_processing_run_state($runId, operational_initial_state($processType, $_POST));
         operational_prepare_process($runId, $processType, $runDate);
 
         operational_json_response($runId);
@@ -89,11 +89,16 @@ function operational_start_label(string $processType): string
     ][$processType];
 }
 
-function operational_initial_state(string $processType): array
+function operational_initial_state(string $processType, array $input = []): array
 {
+    $enrichmentGroup = normalize_historical_enrichment_group((string) ($input['enrichment_group'] ?? 'light'));
+    if ($enrichmentGroup === 'all') {
+        $enrichmentGroup = 'light';
+    }
+
     return [
         'historical_events' => ['step' => 'connectors'],
-        'event_enrichment' => ['step' => 'batch', 'iterations' => 0],
+        'event_enrichment' => ['step' => 'batch', 'iterations' => 0, 'enrichment_group' => $enrichmentGroup],
         'daily_context' => ['step' => 'news'],
         'event_priority' => ['step' => 'prepare'],
     ][$processType];
@@ -121,16 +126,24 @@ function operational_prepare_process(int $runId, string $processType, string $ru
     }
 
     if ($processType === 'event_enrichment') {
+        $run = processing_run_by_id($runId) ?: [];
+        $state = processing_run_state($run);
+        $group = normalize_historical_enrichment_group((string) ($state['enrichment_group'] ?? 'light'));
+        if ($group === 'all') {
+            $group = 'light';
+        }
+        $groupLabel = historical_enrichment_group_label($group);
         $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
-        add_processing_log($runId, 'Enriquecimento preparado: a data sera processada em lotes para consultar as fontes complementares sem travar a interface.', 'info', [
+        add_processing_log($runId, 'Enriquecimento preparado: a data sera processada de forma parcial e repetivel para o tipo selecionado.', 'info', [
             'eventos na data' => $summary['total'],
             'sem enriquecimento marcado' => $summary['not_enriched'],
-            'escopo' => 'todos os grupos ativos',
+            'tipo de enriquecimento' => $groupLabel,
+            'escopo' => 'um grupo por execucao',
         ]);
-        update_processing_run($runId, 'running', 'Aguardando primeiro lote de enriquecimento', [
+        update_processing_run($runId, 'running', 'Aguardando primeira rodada de ' . $groupLabel, [
             'Eventos na data' => $summary['total'],
             'Aguardando enriquecimento' => $summary['not_enriched'],
-            'Escopo' => 'todos os grupos ativos',
+            'Tipo' => $groupLabel,
         ]);
         return;
     }
@@ -219,49 +232,56 @@ function operational_tick_event_enrichment(array $run): void
     $dateParts = date_parts_from_run_date($runDate);
     $state = processing_run_state($run);
     $iterations = (int) ($state['iterations'] ?? 0) + 1;
+    $group = normalize_historical_enrichment_group((string) ($state['enrichment_group'] ?? 'light'));
+    if ($group === 'all') {
+        $group = 'light';
+    }
+    $groupLabel = historical_enrichment_group_label($group);
     $summaryBefore = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
-    $availableGroups = historical_available_enrichment_group_labels();
 
-    add_processing_log($runId, 'Inicio da rodada de enriquecimento ' . $iterations . ': selecionando o proximo evento da data que ainda precisa de fontes complementares.', 'info', [
+    add_processing_log($runId, 'Inicio da rodada de enriquecimento ' . $iterations . ': selecionando o proximo evento pendente para ' . $groupLabel . '.', 'info', [
         'data' => $runDate,
         'eventos na data' => $summaryBefore['total'],
         'eventos sem enriquecimento marcado' => $summaryBefore['not_enriched'],
-        'grupos ativos' => implode(', ', array_values($availableGroups)),
+        'tipo de enriquecimento' => $groupLabel,
     ]);
-    $result = enrich_historical_events_for_day($dateParts['month'], $dateParts['day'], 'all', 1);
+    $result = enrich_historical_events_for_day($dateParts['month'], $dateParts['day'], $group, 1);
     $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
     $runSummary = [
+        'Tipo de enriquecimento' => $groupLabel,
         'Eventos avaliados' => $result['evaluated'],
         'Processados nesta chamada' => $result['processed_events'],
         'Eventos enriquecidos' => $summary['enriched'],
         'Enriquecimentos salvos' => $summary['enrichment_records'],
+        'Pendentes neste tipo' => $result['remaining_events'],
         'Ainda sem enriquecimento marcado' => $summary['not_enriched'],
         'Sem fonte suficiente' => $result['without_source'],
         'Sem resultado' => $result['without_results'],
         'Falhas' => $result['failures'],
     ];
 
-    add_processing_log($runId, 'Entrada da rodada: ' . (int) $result['processed_events'] . ' evento processado nesta chamada, dentro de ' . (int) $result['evaluated'] . ' avaliado(s) ate encontrar pendencia.', 'info', [
+    add_processing_log($runId, 'Entrada da rodada: ' . (int) $result['processed_events'] . ' evento processado neste tipo, dentro de ' . (int) $result['evaluated'] . ' avaliado(s) ate encontrar pendencia.', 'info', [
+        'tipo de enriquecimento' => $groupLabel,
         'limite por chamada' => $result['max_events_per_run'],
         'tempo maximo por chamada' => $result['max_duration_seconds'] . 's',
         'interrompido por limite operacional' => !empty($result['halted_by_budget']) ? 'sim' : 'nao',
     ]);
     operational_add_enrichment_source_logs($runId, $result['source_stats'] ?? []);
-    add_processing_log($runId, 'Rodada de enriquecimento ' . $iterations . ' concluida: ' . (int) $result['enriched_events'] . ' evento(s) receberam novos apoios e ' . (int) $result['saved_enrichments'] . ' registro(s) foram salvos.', ((int) $result['failures']) > 0 ? 'warning' : 'success', [
-        'grupo' => $result['group_label'],
+    add_processing_log($runId, 'Rodada de ' . $groupLabel . ' concluida: ' . (int) $result['enriched_events'] . ' evento(s) receberam novos apoios e ' . (int) $result['saved_enrichments'] . ' registro(s) foram salvos.', ((int) $result['failures']) > 0 ? 'warning' : 'success', [
+        'grupo' => $groupLabel,
         'sem fonte suficiente' => $result['without_source'],
         'sem resultado aplicavel' => $result['without_results'],
         'falhas' => $result['failures'],
     ]);
 
     if ((int) $result['remaining_events'] <= 0 || (int) $result['processed_events'] === 0) {
-        add_processing_log($runId, 'Enriquecimento finalizado. A rotina nao encontrou novos eventos pendentes para os grupos ativos neste momento.', 'success', $runSummary);
-        update_processing_run($runId, 'done', 'Enriquecimento finalizado', $runSummary);
+        add_processing_log($runId, 'Enriquecimento finalizado para ' . $groupLabel . '. A rotina nao encontrou novos eventos pendentes para esse tipo neste momento.', 'success', $runSummary);
+        update_processing_run($runId, 'done', 'Enriquecimento finalizado para ' . $groupLabel, $runSummary);
         return;
     }
 
-    update_processing_run_state($runId, ['step' => 'batch', 'iterations' => $iterations]);
-    update_processing_run($runId, 'running', 'Rodada ' . $iterations . ' concluida; ainda ha eventos pendentes', $runSummary);
+    update_processing_run_state($runId, ['step' => 'batch', 'iterations' => $iterations, 'enrichment_group' => $group]);
+    update_processing_run($runId, 'running', 'Rodada ' . $iterations . ' de ' . $groupLabel . ' concluida; ainda ha eventos pendentes', $runSummary);
 }
 
 function operational_tick_daily_context(array $run): void
