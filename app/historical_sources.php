@@ -221,6 +221,7 @@ function ensure_event_collector_statuses(string $runDate, array $collectors): vo
 function reset_event_collector_statuses_for_date(string $runDate): void
 {
     db()->prepare('DELETE FROM event_collector_statuses WHERE run_date = ?')->execute([$runDate]);
+    purge_deleted_event_imports_for_date($runDate);
 }
 
 function completed_event_collectors_for_date(string $runDate): array

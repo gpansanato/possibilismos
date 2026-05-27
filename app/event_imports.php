@@ -319,3 +319,16 @@ function event_import_summary_for_date(string $runDate): array
         'errors' => (int) ($row['errors'] ?? 0),
     ];
 }
+
+function purge_deleted_event_imports_for_date(string $runDate): int
+{
+    $stmt = db()->prepare(
+        'DELETE FROM event_imports
+         WHERE run_date = ?
+           AND status = "ignored"
+           AND canonical_event_id IS NULL'
+    );
+    $stmt->execute([$runDate]);
+
+    return $stmt->rowCount();
+}

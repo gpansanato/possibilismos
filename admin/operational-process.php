@@ -106,8 +106,15 @@ function operational_prepare_process(int $runId, string $processType, string $ru
     if ($processType === 'historical_events') {
         $config = require __DIR__ . '/../app/config.php';
         $collectors = historical_event_collectors($config['sources']['historical'] ?? [], $config['sources']['wikimedia'] ?? []);
+        $purgedImports = purge_deleted_event_imports_for_date($runDate);
+        if ($purgedImports > 0) {
+            db()->prepare('DELETE FROM event_collector_statuses WHERE run_date = ?')->execute([$runDate]);
+        }
         ensure_event_collector_statuses($runDate, $collectors);
         add_processing_log($runId, 'Coleta de eventos historicos preparada para ' . $runDate . '.', 'info', ['data' => $runDate]);
+        if ($purgedImports > 0) {
+            add_processing_log($runId, $purgedImports . ' import(s) orfao(s) de eventos excluidos foram removidos antes da nova coleta.', 'info', ['imports removidos' => $purgedImports]);
+        }
         add_processing_log($runId, count($collectors) . ' conectores historicos disponiveis para execucao.', 'info', ['conectores' => count($collectors)]);
         update_processing_run($runId, 'running', 'Fila de conectores preparada', ['Conectores concluidos' => '0 de ' . count($collectors)]);
         return;

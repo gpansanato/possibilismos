@@ -74,11 +74,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$selectedIds) {
                 $error = 'Selecione ao menos um evento para excluir.';
             } else {
-                $unlinkImports = db()->prepare('UPDATE event_imports SET canonical_event_id = NULL, status = "ignored", updated_at = NOW() WHERE canonical_event_id = ?');
+                $affectedRunDates = [$actionDate => true];
+                $importDates = db()->prepare('SELECT DISTINCT run_date FROM event_imports WHERE canonical_event_id = ?');
+                $deleteImports = db()->prepare('DELETE FROM event_imports WHERE canonical_event_id = ?');
                 $stmt = db()->prepare('DELETE FROM events WHERE id = ?');
                 foreach ($selectedIds as $eventId) {
-                    $unlinkImports->execute([$eventId]);
+                    $importDates->execute([$eventId]);
+                    foreach ($importDates->fetchAll() as $row) {
+                        $affectedRunDates[(string) $row['run_date']] = true;
+                    }
+                    $deleteImports->execute([$eventId]);
                     $stmt->execute([$eventId]);
+                }
+                foreach (array_keys($affectedRunDates) as $runDate) {
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $runDate)) {
+                        reset_event_collector_statuses_for_date($runDate);
+                    }
                 }
                 $message = count($selectedIds) . ' eventos excluídos.';
             }
