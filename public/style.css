@@ -1018,18 +1018,6 @@ button.is-loading {
     font-size: 12px;
 }
 
-.operation-card__field {
-    display: grid;
-    gap: 6px;
-    color: var(--color-text-secondary);
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.operation-card__field select {
-    width: 100%;
-}
-
 .operation-card__actions {
     display: flex;
     flex-wrap: wrap;
@@ -1040,6 +1028,24 @@ button.is-loading {
 .operation-card__actions button {
     flex: 1 1 auto;
     min-width: 0;
+}
+
+.operation-card__actions--stacked {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.operation-card__actions--stacked button {
+    display: grid;
+    justify-content: stretch;
+    justify-items: start;
+    width: 100%;
+}
+
+.operation-card__actions--stacked button small {
+    margin-top: 2px;
+    color: var(--color-text-muted);
+    font-size: 11px;
 }
 
 .enrichment-command {
