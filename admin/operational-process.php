@@ -115,13 +115,15 @@ function operational_prepare_process(int $runId, string $processType, string $ru
 
     if ($processType === 'event_enrichment') {
         $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
-        add_processing_log($runId, 'Enriquecimento completo preparado para todos os grupos ativos.', 'info', [
+        add_processing_log($runId, 'Enriquecimento preparado: a data sera processada em lotes para consultar as fontes complementares sem travar a interface.', 'info', [
             'eventos na data' => $summary['total'],
             'sem enriquecimento marcado' => $summary['not_enriched'],
+            'escopo' => 'todos os grupos ativos',
         ]);
         update_processing_run($runId, 'running', 'Aguardando primeiro lote de enriquecimento', [
             'Eventos na data' => $summary['total'],
             'Aguardando enriquecimento' => $summary['not_enriched'],
+            'Escopo' => 'todos os grupos ativos',
         ]);
         return;
     }
@@ -210,9 +212,16 @@ function operational_tick_event_enrichment(array $run): void
     $dateParts = date_parts_from_run_date($runDate);
     $state = processing_run_state($run);
     $iterations = (int) ($state['iterations'] ?? 0) + 1;
+    $summaryBefore = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
+    $availableGroups = historical_available_enrichment_group_labels();
 
-    add_processing_log($runId, 'Inicio do lote de enriquecimento ' . $iterations . ': todos os grupos ativos serao avaliados para os eventos pendentes.', 'info');
-    $result = enrich_historical_events_for_day($dateParts['month'], $dateParts['day'], 'all');
+    add_processing_log($runId, 'Inicio da rodada de enriquecimento ' . $iterations . ': selecionando o proximo evento da data que ainda precisa de fontes complementares.', 'info', [
+        'data' => $runDate,
+        'eventos na data' => $summaryBefore['total'],
+        'eventos sem enriquecimento marcado' => $summaryBefore['not_enriched'],
+        'grupos ativos' => implode(', ', array_values($availableGroups)),
+    ]);
+    $result = enrich_historical_events_for_day($dateParts['month'], $dateParts['day'], 'all', 1);
     $summary = historical_collection_summary_for_day($dateParts['month'], $dateParts['day']);
     $runSummary = [
         'Eventos avaliados' => $result['evaluated'],
@@ -225,20 +234,27 @@ function operational_tick_event_enrichment(array $run): void
         'Falhas' => $result['failures'],
     ];
 
-    add_processing_log($runId, 'Lote de enriquecimento ' . $iterations . ' finalizado: ' . (int) $result['processed_events'] . ' eventos processados, ' . (int) $result['enriched_events'] . ' enriquecidos e ' . (int) $result['saved_enrichments'] . ' registros de apoio salvos.', ((int) $result['failures']) > 0 ? 'warning' : 'success', [
+    add_processing_log($runId, 'Entrada da rodada: ' . (int) $result['processed_events'] . ' evento processado nesta chamada, dentro de ' . (int) $result['evaluated'] . ' avaliado(s) ate encontrar pendencia.', 'info', [
+        'limite por chamada' => $result['max_events_per_run'],
+        'tempo maximo por chamada' => $result['max_duration_seconds'] . 's',
+        'interrompido por limite operacional' => !empty($result['halted_by_budget']) ? 'sim' : 'nao',
+    ]);
+    operational_add_enrichment_source_logs($runId, $result['source_stats'] ?? []);
+    add_processing_log($runId, 'Rodada de enriquecimento ' . $iterations . ' concluida: ' . (int) $result['enriched_events'] . ' evento(s) receberam novos apoios e ' . (int) $result['saved_enrichments'] . ' registro(s) foram salvos.', ((int) $result['failures']) > 0 ? 'warning' : 'success', [
         'grupo' => $result['group_label'],
-        'pendentes neste tipo' => $result['remaining_events'],
-        'fontes' => operational_source_stats_text($result['source_stats'] ?? []),
+        'sem fonte suficiente' => $result['without_source'],
+        'sem resultado aplicavel' => $result['without_results'],
+        'falhas' => $result['failures'],
     ]);
 
     if ((int) $result['remaining_events'] <= 0 || (int) $result['processed_events'] === 0) {
-        add_processing_log($runId, 'Enriquecimento finalizado. Nao ha novos lotes pendentes para os grupos ativos neste momento.', 'success', $runSummary);
+        add_processing_log($runId, 'Enriquecimento finalizado. A rotina nao encontrou novos eventos pendentes para os grupos ativos neste momento.', 'success', $runSummary);
         update_processing_run($runId, 'done', 'Enriquecimento finalizado', $runSummary);
         return;
     }
 
     update_processing_run_state($runId, ['step' => 'batch', 'iterations' => $iterations]);
-    update_processing_run($runId, 'running', 'Lote ' . $iterations . ' concluido; preparando proximo lote', $runSummary);
+    update_processing_run($runId, 'running', 'Rodada ' . $iterations . ' concluida; ainda ha eventos pendentes', $runSummary);
 }
 
 function operational_tick_daily_context(array $run): void
@@ -386,4 +402,52 @@ function operational_source_stats_text(array $sourceStats): string
     }
 
     return implode(' | ', array_slice($parts, 0, 4));
+}
+
+function operational_add_enrichment_source_logs(int $runId, array $sourceStats): void
+{
+    if (!$sourceStats) {
+        add_processing_log($runId, 'Nenhum endpoint externo foi consultado neste lote. Os eventos avaliados ja estavam cobertos ou nao tinham entrada suficiente para busca.', 'warning');
+        return;
+    }
+
+    foreach ($sourceStats as $source => $stats) {
+        $attempted = (int) ($stats['attempted'] ?? 0);
+        $saved = (int) ($stats['saved'] ?? 0);
+        $empty = (int) ($stats['empty'] ?? 0);
+        $skipped = (int) ($stats['skipped'] ?? 0);
+        $errors = (int) ($stats['errors'] ?? 0);
+        $level = $errors > 0 ? 'warning' : ($saved > 0 ? 'success' : 'info');
+        $endpoint = operational_enrichment_endpoint_label((string) $source);
+
+        if ($attempted === 0 && $skipped > 0) {
+            add_processing_log($runId, 'Endpoint nao acionado: ' . $source . ' ficou indisponivel para ' . $skipped . ' evento(s).', 'warning', [
+                'endpoint' => $endpoint,
+                'motivo' => 'configuracao ausente ou entrada insuficiente',
+                'ignorados' => $skipped,
+            ]);
+            continue;
+        }
+
+        add_processing_log($runId, 'Endpoint consultado: ' . $source . ' recebeu ' . $attempted . ' chamada(s) e retornou ' . $saved . ' registro(s) aproveitavel(is).', $level, [
+            'endpoint' => $endpoint,
+            'entradas enviadas' => $attempted,
+            'registros salvos' => $saved,
+            'sem resultado aplicavel' => $empty,
+            'ignorados antes da chamada' => $skipped,
+            'falhas' => $errors,
+        ]);
+    }
+}
+
+function operational_enrichment_endpoint_label(string $source): string
+{
+    return [
+        'Wikipedia REST Summary' => 'Wikipedia REST API / page summary',
+        'Library of Congress' => 'Library of Congress search API',
+        'Europeana' => 'Europeana Search API',
+        'DPLA / National Archives' => 'DPLA API / apoio arquivistico',
+        'Smithsonian Open Access' => 'Smithsonian Open Access API',
+        'OpenHistoricalMap' => 'OpenHistoricalMap / Overpass endpoint configurado',
+    ][$source] ?? $source;
 }

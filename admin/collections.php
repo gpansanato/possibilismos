@@ -450,7 +450,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             }
             try {
                 const context = typeof contextJson === 'string' ? JSON.parse(contextJson) : contextJson;
-                const entries = Object.entries(context || {}).slice(0, 5);
+                const entries = Object.entries(context || {}).slice(0, 8);
                 if (!entries.length) {
                     return '';
                 }

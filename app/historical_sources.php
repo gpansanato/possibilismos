@@ -342,7 +342,7 @@ function historical_available_enrichment_group_labels(): array
     return array_intersect_key($labels, array_fill_keys($available, true));
 }
 
-function enrich_historical_events_for_day(int $month, int $day, string $group = 'light'): array
+function enrich_historical_events_for_day(int $month, int $day, string $group = 'light', ?int $maxEventsOverride = null): array
 {
     $group = normalize_historical_enrichment_group($group);
     sync_enriched_at_for_day($month, $day);
@@ -379,7 +379,9 @@ function enrich_historical_events_for_day(int $month, int $day, string $group = 
     $coverage = enrichment_group_coverage_for_events($eventIds);
     $config = require __DIR__ . '/config.php';
     $settings = $config['sources']['historical'] ?? [];
-    $maxEventsPerRun = max(1, (int) ($settings['max_enrichment_events_per_run'] ?? 20));
+    $maxEventsPerRun = $maxEventsOverride !== null
+        ? max(1, $maxEventsOverride)
+        : max(1, (int) ($settings['max_enrichment_events_per_run'] ?? 20));
     $maxDuration = max(15, (int) ($settings['max_enrichment_duration_seconds'] ?? 120));
     $availableGroups = historical_available_enrichment_groups($settings);
     $groupsToRun = $group === 'all'
