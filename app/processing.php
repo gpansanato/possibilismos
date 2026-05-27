@@ -4,11 +4,30 @@ function create_processing_run(string $processType, string $runDate, string $lab
 {
     $stmt = db()->prepare(
         'INSERT INTO processing_runs
-         (process_type, run_date, status, current_label, summary_json, started_at, updated_at)
-         VALUES (?, ?, "running", ?, "{}", NOW(), NOW())'
+         (process_type, run_date, status, current_label, summary_json, state_json, started_at, updated_at)
+         VALUES (?, ?, "running", ?, "{}", "{}", NOW(), NOW())'
     );
     $stmt->execute([$processType, $runDate, $label]);
     return (int) db()->lastInsertId();
+}
+
+function processing_run_state(array $run): array
+{
+    $state = json_decode((string) ($run['state_json'] ?? '{}'), true);
+    return is_array($state) ? $state : [];
+}
+
+function update_processing_run_state(int $runId, array $state): void
+{
+    $stmt = db()->prepare(
+        'UPDATE processing_runs
+         SET state_json = ?, updated_at = NOW()
+         WHERE id = ?'
+    );
+    $stmt->execute([
+        json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        $runId,
+    ]);
 }
 
 function processing_run_by_id(int $runId): ?array
@@ -79,6 +98,7 @@ function processing_run_payload(int $runId): array
     return [
         'ok' => $run['status'] !== 'error',
         'run_id' => (int) $run['id'],
+        'process_type' => $run['process_type'],
         'status' => $run['status'],
         'date' => $run['run_date'],
         'current_label' => $run['current_label'],

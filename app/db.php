@@ -248,6 +248,7 @@ function ensure_processing_runs_schema(): void
             status ENUM("running", "done", "error") NOT NULL DEFAULT "running",
             current_label VARCHAR(255) NULL,
             summary_json TEXT NULL,
+            state_json TEXT NULL,
             error_message TEXT NULL,
             started_at DATETIME NOT NULL,
             finished_at DATETIME NULL,
@@ -271,6 +272,8 @@ function ensure_processing_runs_schema(): void
                 ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
+
+    db_add_column_if_missing('processing_runs', 'state_json', 'state_json TEXT NULL AFTER summary_json');
 
     $checked = true;
 }

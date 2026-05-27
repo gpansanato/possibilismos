@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $trends = collect_daily_trend_topics($actionDate);
             $failedStep = 'Atualizando resumo da coleta';
             $topics = current_topics_count_for_date($actionDate);
-            $processTitle = 'Processamento 3: contexto do dia';
+            $processTitle = 'Coleta de contexto';
             $processDescription = 'Coleta e higienizacao integrada de noticias e tendencias usadas como insumos contextuais.';
             $processSteps = [
                 collection_process_step('Preparar execucao para a data selecionada', 'Parametros de data validados e fontes de contexto identificadas.', '1 data processada'),
@@ -236,27 +236,42 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         </form>
         <form class="actions" method="post" id="collection-process-form" action="/admin/collections.php">
             <input type="hidden" name="date" id="collection-process-date" value="<?= h($date) ?>">
-            <div class="process-action-group">
-            <button name="action" value="process_events" type="submit" data-process-label="Coleta de eventos historicos">Coletar eventos historicos</button>
-                <button class="button-secondary" name="action" value="process_events" type="submit" data-process-label="Recoleta de eventos historicos" data-reset-collectors="1">Recoletar eventos do dia</button>
-                <button class="button-secondary" name="action" value="process_context" type="submit" data-process-label="Processamento 3: contexto do dia">Processar contexto do dia</button>
-                <button class="button-secondary" name="action" value="process_priority" type="submit" data-process-label="Processamento 4: priorizacao de eventos">Aplicar priorizacao</button>
-            </div>
             <input type="hidden" name="reset_collectors" value="0">
-            <div class="enrichment-command">
-                <div>
-                    <strong>Enriquecimento dos eventos historicos</strong>
-                    <p>Escolha o tipo de fonte complementar que sera aplicado aos eventos da data selecionada.</p>
-                    <p><?= h((string) $historicalSummary['total']) ?> eventos na data; <?= h((string) $historicalSummary['not_enriched']) ?> ainda sem enriquecimento marcado.</p>
+            <div class="operation-grid">
+                <div class="operation-card">
+                    <span>1</span>
+                    <strong>Eventos historicos</strong>
+                    <p>Coleta, normaliza e deduplica candidatos nas fontes historicas ativas.</p>
+                    <div class="operation-card__actions">
+                        <button name="action" value="process_events" type="submit" data-process-type="historical_events" data-process-label="Coleta de eventos historicos">Coletar eventos historicos</button>
+                        <button class="button-secondary" name="action" value="process_events" type="submit" data-process-type="historical_events" data-process-label="Recoleta de eventos historicos" data-reset-collectors="1">Recoletar dia</button>
+                    </div>
                 </div>
-                <label>Tipo de enriquecimento
-                    <select name="enrichment_group">
-                        <?php foreach (historical_available_enrichment_group_labels() as $groupKey => $groupLabel): ?>
-                            <option value="<?= h($groupKey) ?>"><?= h($groupLabel) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <button class="button-secondary" name="action" value="process_enrichment" type="submit" data-process-label="Processamento 2: enriquecimento de eventos">Enriquecer eventos</button>
+                <div class="operation-card">
+                    <span>2</span>
+                    <strong>Enriquecimento</strong>
+                    <p>Executa todos os grupos ativos de enriquecimento para os eventos da data.</p>
+                    <small><?= h((string) $historicalSummary['total']) ?> eventos na data; <?= h((string) $historicalSummary['not_enriched']) ?> ainda sem enriquecimento marcado.</small>
+                    <div class="operation-card__actions">
+                        <button class="button-secondary" name="action" value="process_enrichment" type="submit" data-process-type="event_enrichment" data-process-label="Enriquecimento de eventos">Enriquecer eventos</button>
+                    </div>
+                </div>
+                <div class="operation-card">
+                    <span>3</span>
+                    <strong>Contexto do dia</strong>
+                    <p>Coleta noticias, tendencias e topicos operacionais usados como insumo editorial.</p>
+                    <div class="operation-card__actions">
+                        <button class="button-secondary" name="action" value="process_context" type="submit" data-process-type="daily_context" data-process-label="Coleta de contexto">Coletar contexto</button>
+                    </div>
+                </div>
+                <div class="operation-card">
+                    <span>4</span>
+                    <strong>Priorizacao</strong>
+                    <p>Aplica os criterios editoriais e registra score, motivos e resumo contextual.</p>
+                    <div class="operation-card__actions">
+                        <button class="button-secondary" name="action" value="process_priority" type="submit" data-process-type="event_priority" data-process-label="Priorizacao de eventos">Aplicar priorizacao</button>
+                    </div>
+                </div>
             </div>
         </form>
     </section>
@@ -342,10 +357,16 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             return;
         }
 
-        const flowStepsByAction = <?= json_encode($collectionFlowSteps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         let currentFlowSteps = [];
         let elapsedTimer = null;
         let startedAt = 0;
+
+        const processTitles = {
+            historical_events: 'Coleta de eventos historicos',
+            event_enrichment: 'Enriquecimento de eventos',
+            daily_context: 'Coleta de contexto',
+            event_priority: 'Priorizacao de eventos'
+        };
 
         function setButtons(disabled) {
             form.querySelectorAll('button[type="submit"]').forEach((button) => {
@@ -354,63 +375,28 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             });
         }
 
-        function renderLog(statuses) {
-            const steps = (currentFlowSteps.length ? currentFlowSteps : [{ title: 'Preparando execucao' }]).map(normalizeStep);
-            logEl.innerHTML = steps.map((step, index) => {
-                const status = statuses[index] || 'pending';
-                const statusLabel = status === 'done' ? 'Concluido' : status === 'running' ? 'Em execucao' : status === 'error' ? 'Erro' : 'Pendente';
-                const detail = [step.description, step.result].filter(Boolean).join(' ');
-                return '<div class="process-log__item is-' + status + '">' +
-                    '<span>' + statusLabel + ':</span> ' +
-                    '<strong>' + escapeHtml(step.title) + '</strong>' +
-                    (detail ? '<p>' + escapeHtml(detail) + '</p>' : '') +
-                    '</div>';
-            }).join('');
-            const done = statuses.filter((status) => status === 'done').length;
-            const running = statuses.includes('running') ? 1 : 0;
-            const progress = (done + running * 0.25) / steps.length * 100;
-            progressBar.style.width = Math.min(96, progress) + '%';
-        }
-
-        function startVisualProgress(label, action) {
+        function startOperationalProgress(label, processType) {
             startedAt = Date.now();
-            const plannedSteps = action === 'process_events'
-                ? []
-                : (flowStepsByAction[action] || flowStepsByAction.default || ['Preparando execucao', 'Finalizando execucao']);
-            currentFlowSteps = [{
-                title: action === 'process_events' ? 'Coleta em andamento' : 'Aguardando resposta do servidor',
-                description: action === 'process_events'
-                    ? 'O servidor esta executando os conectores historicos. O log com cada conector e suas quantidades aparecera assim que a rodada terminar.'
-                    : 'A requisicao esta ativa. Sem streaming de etapas, a interface nao confirma conclusoes parciais antes do retorno final.',
-                result: ''
-            }].concat(plannedSteps);
             title.textContent = label || 'Processamento em andamento';
-            description.textContent = action === 'process_events'
-                ? 'A coleta foi iniciada. Enquanto a requisicao estiver ativa, acompanhe o tempo decorrido; os detalhes reais chegam no retorno do servidor.'
-                : 'A execucao foi enviada ao servidor. As etapas abaixo so serao marcadas como concluidas quando o servidor devolver o resumo real do processamento.';
+            description.textContent = 'A execucao foi iniciada. O servidor registrara cada etapa conforme o fluxo avancar.';
             summaryEl.innerHTML = '';
+            logEl.innerHTML = '<div class="process-log__item is-running"><span>Iniciando</span><strong>' + escapeHtml(processTitles[processType] || 'Processamento operacional') + '</strong><p>Preparando a execucao para a data selecionada.</p></div>';
+            progressBar.style.width = '8%';
+            progressBar.classList.remove('is-error');
             updateElapsed();
-            progressStatus.textContent = 'Processamento em andamento';
+            progressStatus.textContent = 'Iniciando processamento';
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            renderLog(currentFlowSteps.map((_, index) => index === 0 ? 'running' : 'pending'));
             elapsedTimer = window.setInterval(updateElapsed, 1000);
         }
 
         function finishVisualProgress(payload) {
             clearTimers();
-            const steps = payload.steps && payload.steps.length ? payload.steps : currentFlowSteps;
-            currentFlowSteps = steps.length ? steps : ['Finalizando execucao'];
-            const statuses = currentFlowSteps.map(() => payload.ok ? 'done' : 'pending');
-            if (!payload.ok) {
-                statuses[0] = 'error';
-            }
             title.textContent = payload.title || (payload.ok ? 'Processamento concluido' : 'Processamento interrompido');
             description.textContent = payload.ok
                 ? (payload.description || payload.message || 'Execucao finalizada.')
                 : (payload.error || 'Nao foi possivel concluir o processamento.');
             progressStatus.textContent = payload.ok ? 'Processamento concluido' : 'Processamento interrompido';
             updateElapsed(payload.summary && payload.summary.Duracao ? payload.summary.Duracao : null);
-            renderLog(statuses);
             progressBar.style.width = payload.ok ? '100%' : '12%';
             progressBar.classList.toggle('is-error', !payload.ok);
             renderSummary(payload.summary || {});
@@ -423,9 +409,14 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         }
 
         function renderProcessingRun(payload) {
-            title.textContent = payload.status === 'done' ? 'Coleta de eventos historicos concluida' : 'Coleta de eventos historicos em andamento';
-            description.textContent = payload.current_label || 'Executando conectores historicos da data selecionada.';
-            progressStatus.textContent = payload.status === 'done' ? 'Processamento concluido' : 'Processamento em andamento';
+            const processTitle = processTitles[payload.process_type] || 'Processamento operacional';
+            title.textContent = payload.status === 'error'
+                ? processTitle + ' interrompido'
+                : (payload.status === 'done' ? processTitle + ' concluido' : processTitle + ' em andamento');
+            description.textContent = payload.current_label || 'Executando fluxo operacional da data selecionada.';
+            progressStatus.textContent = payload.status === 'error'
+                ? 'Processamento interrompido'
+                : (payload.status === 'done' ? 'Processamento concluido' : 'Processamento em andamento');
             updateElapsed();
 
             const logs = payload.logs || [];
@@ -436,7 +427,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                     '<strong>' + escapeHtml(log.message || '') + '</strong>' +
                     renderLogContext(log.context_json) +
                     '</div>';
-            }).join('') : '<p class="process-log__empty">Preparando execucao da coleta historica.</p>';
+            }).join('') : '<p class="process-log__empty">Preparando execucao operacional.</p>';
 
             renderSummary(payload.summary || {});
             if (payload.status === 'done') {
@@ -445,6 +436,12 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                 progressBar.style.width = progressFromSummary(payload.summary || {});
             }
             progressBar.classList.toggle('is-error', payload.status === 'error');
+            if (payload.tableRows && statusRows) {
+                statusRows.innerHTML = payload.tableRows;
+            }
+            if (payload.date && statusDate) {
+                statusDate.textContent = payload.date;
+            }
         }
 
         function renderLogContext(contextJson) {
@@ -466,28 +463,30 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         function progressFromSummary(summary) {
             const value = String(summary['Conectores concluidos'] || '');
             const match = value.match(/(\d+)\s+de\s+(\d+)/);
-            if (!match) {
-                return '18%';
+            if (match) {
+                const done = parseInt(match[1], 10);
+                const total = Math.max(1, parseInt(match[2], 10));
+                return Math.max(8, Math.min(96, Math.round(done / total * 100))) + '%';
             }
-            const done = parseInt(match[1], 10);
-            const total = Math.max(1, parseInt(match[2], 10));
-            return Math.max(8, Math.min(96, Math.round(done / total * 100))) + '%';
+
+            if (summary['Rankings gerados'] || summary['Contextos totais']) {
+                return '88%';
+            }
+
+            if (summary['Processados nesta chamada']) {
+                return summary['Ainda sem enriquecimento marcado'] && parseInt(summary['Ainda sem enriquecimento marcado'], 10) > 0 ? '68%' : '92%';
+            }
+
+            return '24%';
         }
 
-        async function runHistoricalEventsProcess(submitter) {
-            startedAt = Date.now();
-            title.textContent = submitter.dataset.processLabel || 'Coleta de eventos historicos';
-            description.textContent = 'Iniciando execucao dos conectores historicos. As notificacoes serao atualizadas a cada conector concluido.';
-            summaryEl.innerHTML = '';
-            progressBar.style.width = '8%';
-            progressStatus.textContent = 'Iniciando processamento';
-            logEl.innerHTML = '<div class="process-log__item is-running"><span>Iniciando:</span> <strong>Preparando execucao da coleta historica</strong><p>A data foi enviada ao servidor e a fila de conectores sera preparada.</p></div>';
-            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            updateElapsed();
-            elapsedTimer = window.setInterval(updateElapsed, 1000);
+        async function runOperationalProcess(submitter) {
+            const processType = submitter.dataset.processType || 'historical_events';
+            startOperationalProgress(submitter.dataset.processLabel, processType);
 
             const startData = new FormData();
             startData.set('mode', 'start');
+            startData.set('process_type', processType);
             startData.set('date', dateInput && dateInput.value ? dateInput.value : processDate.value);
             startData.set('reset_collectors', submitter.dataset.resetCollectors === '1' ? '1' : '0');
             const startPayload = await postProcessRequest(startData);
@@ -508,7 +507,7 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
         }
 
         async function postProcessRequest(formData) {
-            const response = await fetch('/admin/historical-events-process.php', {
+            const response = await fetch('/admin/operational-process.php', {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -517,9 +516,6 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
                 }
             });
             const payload = parseJsonResponse(await response.text());
-            if (!payload.ok && payload.status === 'error') {
-                throw new Error(payload.error || 'Falha no processamento.');
-            }
             return payload;
         }
 
@@ -577,49 +573,15 @@ render_page_start('Coletas', 'collections', 'admin', 'Home operacional para exec
             setButtons(true);
             progressBar.classList.remove('is-error');
 
-            if (submitter.value === 'process_events') {
-                try {
-                    await runHistoricalEventsProcess(submitter);
-                } catch (error) {
-                    finishVisualProgress({
-                        ok: false,
-                        title: 'Falha na coleta historica',
-                        error: error.message,
-                        summary: { 'Falhas': 1, 'Mensagem': error.message }
-                    });
-                    setButtons(false);
-                }
-                return;
-            }
-
-            startVisualProgress(submitter.dataset.processLabel, submitter.value);
-
             if (resetCollectors) {
                 resetCollectors.value = submitter.dataset.resetCollectors === '1' ? '1' : '0';
             }
-            const formData = new FormData(form);
             if (dateInput && processDate) {
                 processDate.value = dateInput.value || processDate.value;
             }
-            formData.set(submitter.name, submitter.value);
-            if (dateInput && dateInput.value) {
-                formData.set('date', dateInput.value);
-            }
-            formData.set('async', '1');
 
             try {
-                const endpoint = form.getAttribute('action') || '/admin/collections.php';
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                });
-                const responseText = await response.text();
-                const payload = parseJsonResponse(responseText);
-                finishVisualProgress(payload);
+                await runOperationalProcess(submitter);
             } catch (error) {
                 finishVisualProgress({
                     ok: false,
@@ -728,7 +690,7 @@ function collection_action_label(string $action): string
     return [
         'process_events' => 'Coleta de eventos historicos',
         'process_enrichment' => 'Processamento 2: enriquecimento de eventos',
-        'process_context' => 'Processamento 3: contexto do dia',
+        'process_context' => 'Coleta de contexto',
         'process_priority' => 'Processamento 4: priorizacao de eventos',
     ][$action] ?? 'Processamento operacional';
 }

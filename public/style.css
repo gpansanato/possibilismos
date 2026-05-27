@@ -970,6 +970,66 @@ button.is-loading {
     width: 100%;
 }
 
+.operation-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+.operation-card {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    min-height: 220px;
+    padding: 16px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.operation-card span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    border-radius: 12px;
+    color: var(--color-text-primary);
+    background: rgba(59, 130, 246, 0.18);
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.operation-card strong {
+    color: var(--color-text-primary);
+    font-size: 16px;
+}
+
+.operation-card p,
+.operation-card small {
+    margin: 0;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+}
+
+.operation-card small {
+    font-size: 12px;
+}
+
+.operation-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.operation-card__actions button {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .enrichment-command {
     margin-top: 8px;
     padding: 14px;
@@ -1171,6 +1231,18 @@ button.is-loading {
 
 .process-log__item.is-pending {
     opacity: 0.72;
+}
+
+@media (max-width: 980px) {
+    .operation-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .operation-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .process-summary {
